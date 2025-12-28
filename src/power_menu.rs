@@ -1,13 +1,12 @@
-use std::ops::Deref;
+use std::{ops::Deref, time::Duration};
 
 use gpui::{
-    App, ClickEvent, Context, ElementId, Entity, FocusHandle, FontWeight, KeyBinding,
-    PlatformDisplay, StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind,
-    WindowOptions, actions, black, div,
+    Animation, AnimationExt, App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay,
+    StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind, WindowOptions,
+    actions, black, div, ease_in_out,
     layer_shell::{KeyboardInteractivity, Layer, LayerShellOptions},
-    opaque_grey,
     prelude::*,
-    rems, rgba, white,
+    relative, rems, white,
 };
 
 actions!([Escape]);
@@ -63,67 +62,135 @@ impl PowerMenu {
     }
 }
 
-fn button(
-    id: impl Into<ElementId>,
-    text: &'static str,
-    on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-) -> impl IntoElement {
-    div().id(id).on_click(on_click).child(text)
-}
-
 impl Render for PowerMenu {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        div()
+        let wrapper = div()
+            .id("power-menu-wrapper")
             .key_context("power-menu")
             .track_focus(&self.focus_handle)
-            // .on_action(|_escape: &Escape, window, _cx| {
-            //     window.remove_window();
-            // })
+            .on_action(|_escape: &Escape, window, _cx| {
+                window.remove_window();
+            })
+            .on_click(|_, window, _| {
+                window.remove_window();
+            })
             .size_full()
             .flex()
-            .flex_col()
+            // .flex_col()
             .items_center()
             .justify_center()
-            .bg(opaque_grey(0.2, 0.8))
-            .child(
-                div()
-                    .flex()
-                    .items_center()
-                    .gap(rems(1.0))
-                    .text_size(rems(1.5))
-                    .font_weight(FontWeight::EXTRA_BOLD)
-                    .text_color(white())
-                    .bg(rgba(0x0000044))
-                    .rounded_xl()
-                    .child(button(
-                        "reboot",
-                        "Reboot",
-                        cx.listener(|this, _, _, _| this.selected = Some(PowerMenuOption::Reboot)),
-                    ))
-                    .child(button(
-                        "shutdown",
-                        "Shutdown",
-                        cx.listener(|this, _, _, _| {
-                            this.selected = Some(PowerMenuOption::Shutdown)
-                        }),
-                    ))
-                    .child(format!("selected == {:?}", self.selected)),
-            )
-            .child(
-                div()
-                    .id("power-menu-close")
-                    .on_click(|_click_event, window, _cx| {
-                        window.remove_window();
-                    })
-                    .text_color(white())
-                    .bg(black())
-                    .child("Close"),
-            )
+            .gap(rems(0.5));
+        // .bg(opaque_grey(0.2, 0.8));
+
+        let button = || {
+            div()
+                .flex()
+                .items_center()
+                .justify_center()
+                .rounded_xl()
+                .text_size(rems(5.0))
+                .text_color(white())
+                .font_family("Material Symbols Rounded")
+                .bg(black())
+        };
+
+        if let Some(selected_option) = self.selected {
+            wrapper
+                .child(
+                    button()
+                        .id("power-menu-back")
+                        .on_click(cx.listener(|this, _, _, cx| {
+                            this.selected = None;
+                            cx.stop_propagation();
+                        }))
+                        .px(rems(0.6))
+                        .child(""), // .with_animation(
+                                     //     "power-menu-back-name-animation",
+                                     //     Animation::new(Duration::from_millis(1500))
+                                     //         .with_easing(ease_in_out),
+                                     //     |element, delta| element.w(relative(delta)),
+                                     // ),
+                )
+                .child(
+                    button()
+                        .id("power-menu-real")
+                        .on_click(|_, window, cx| {
+                            window.remove_window();
+                            cx.stop_propagation();
+                        })
+                        .gap(rems(2.0))
+                        .px(rems(2.0))
+                        .child(selected_option.icon())
+                        .child(
+                            div()
+                                .text_size(rems(3.6))
+                                .font_family("Noto Sans")
+                                .child(selected_option.name())
+                                .with_animation(
+                                    "power-menu-real-name",
+                                    Animation::new(Duration::from_millis(1500))
+                                        .with_easing(ease_in_out),
+                                    |element, delta| element.w(relative(delta)),
+                                ),
+                        ),
+                )
+        } else {
+            wrapper.children(PowerMenuOption::ALL.map(|option| {
+                button()
+                    .id(format!("power-menu-option-{}", option.id()))
+                    .on_click(cx.listener(move |this, _, _, cx| {
+                        this.selected = Some(option);
+                        cx.stop_propagation();
+                    }))
+                    .w(rems(8.0))
+                    .child(option.icon())
+            }))
+        }
     }
 }
 
 #[derive(Clone, Copy, Debug)]
 enum PowerMenuOption {
+    Lock,
+    Suspend,
+    Hibernate,
     Reboot,
     Shutdown,
+}
+
+impl PowerMenuOption {
+    const ALL: [Self; 5] = [
+        Self::Lock,
+        Self::Suspend,
+        Self::Hibernate,
+        Self::Reboot,
+        Self::Shutdown,
+    ];
+    const fn id(&self) -> &'static str {
+        match self {
+            Self::Lock => "lock",
+            Self::Suspend => "suspend",
+            Self::Hibernate => "hibernate",
+            Self::Reboot => "reboot",
+            Self::Shutdown => "shutdown",
+        }
+    }
+    const fn name(&self) -> &'static str {
+        match self {
+            Self::Lock => "Lock",
+            Self::Suspend => "Suspend",
+            Self::Hibernate => "Hibernate",
+            Self::Reboot => "Reboot",
+            Self::Shutdown => "Shutdown",
+        }
+    }
+    const fn icon(&self) -> &'static str {
+        match self {
+            Self::Lock => "󰌿",
+            Self::Suspend => "󰏥",
+            Self::Hibernate => "󰤄",
+            Self::Reboot => "󰜉",
+            Self::Shutdown => "󰐥",
+        }
+    }
 }
