@@ -19,6 +19,8 @@ const HEIGHT: f32 = 40.0;
 
 fn main() {
     Application::new().run(|cx: &mut App| {
+        gpui_tokio::init(cx);
+
         cx.spawn(async |cx| {
             // TODO: by default, gpui will not wait for wayland to tell us displays information
             // wait 10 poll for wayland to tell us all screens
@@ -64,7 +66,10 @@ impl Bar {
                 cx.new(widget::Display::new).into(),
             ],
             center: vec![cx.new(widget::HyprlandWorkspace::new).into()],
-            right: vec![cx.new(widget::Quit::new).into()],
+            right: vec![
+                cx.new(widget::Bluetooth::new).into(),
+                cx.new(widget::Quit::new).into(),
+            ],
         })
     }
     pub fn window_options(

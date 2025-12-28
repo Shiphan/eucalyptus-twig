@@ -15,6 +15,8 @@
           libxkbcommon.dev
           wayland
           vulkan-loader
+          pkg-config
+          dbus.dev
         ];
         LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath buildInputs;
       };
