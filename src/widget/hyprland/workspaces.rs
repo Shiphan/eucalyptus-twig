@@ -9,7 +9,7 @@ use gpui::{
     opaque_grey, rems,
 };
 use gpui_net::async_net::UnixStream;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 use crate::widget::{Widget, widget_wrapper};
 
@@ -254,7 +254,7 @@ where
     ))
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Deserialize)]
 struct WorkspaceInfoRaw {
     id: i64,
     name: String,
