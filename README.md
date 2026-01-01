@@ -21,6 +21,7 @@ TODO:
     - maybe use this: <https://wayland.app/protocols/ext-workspace-v1>
 - [ ] audio/volume
     - pipewire: <https://gitlab.freedesktop.org/pipewire/pipewire-rs>
+    - pipewire-native: <https://gitlab.freedesktop.org/pipewire/pipewire-native-rs>
     - [ ] show info
     - [ ] setting panel
 - [ ] internet/wifi

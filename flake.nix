@@ -17,7 +17,9 @@
           vulkan-loader
           pkg-config
           dbus.dev
+          pipewire.dev
         ];
+        LIBCLANG_PATH = nixpkgs.lib.makeLibraryPath (with pkgs; [ libclang.lib ]);
         LD_LIBRARY_PATH = nixpkgs.lib.makeLibraryPath buildInputs;
       };
       formatter.${system} = pkgs.nixfmt-tree;

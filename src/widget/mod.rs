@@ -6,6 +6,7 @@ pub use display::Display;
 pub use hyprland::workspaces::HyprlandWorkspace;
 pub use power_menu::PowerMenu;
 pub use quit::Quit;
+pub use volume::Volume;
 
 pub mod bluetooth;
 pub mod clock;
@@ -13,6 +14,7 @@ pub mod display;
 pub mod hyprland;
 pub mod power_menu;
 pub mod quit;
+pub mod volume;
 
 pub fn widget_wrapper() -> Div {
     div()

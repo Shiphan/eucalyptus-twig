@@ -67,6 +67,7 @@ impl Bar {
             ],
             center: vec![cx.new(widget::HyprlandWorkspace::new).into()],
             right: vec![
+                cx.new(widget::Volume::new).into(),
                 cx.new(widget::Bluetooth::new).into(),
                 cx.new(widget::Quit::new).into(),
             ],
