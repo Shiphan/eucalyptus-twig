@@ -1,4 +1,9 @@
-use std::{collections::BTreeMap, env, fmt::Display, path::Path};
+use std::{
+    collections::{BTreeMap, btree_map},
+    env,
+    fmt::Display,
+    path::Path,
+};
 
 use futures::{
     AsyncReadExt, AsyncWriteExt,
@@ -100,21 +105,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
         }
     };
 
-    match get_workspaces(&command_socket_path).await {
-        Ok(workspaces) => {
-            let _ = this.update(cx, |this, cx| {
-                this.workspaces = workspaces;
-                cx.notify()
-            });
-        }
-        Err(e) => {
-            println!("{e}");
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(e);
-                cx.notify()
-            });
-        }
-    }
+    try_update_with_get_workspace(&command_socket_path, &this, cx).await;
 
     loop {
         let mut line = String::new();
@@ -128,27 +119,78 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 break;
             }
         };
+        let line = line.strip_suffix('\n').unwrap_or(line.as_str());
 
-        // FIXME: remove all unwrap!!!
-        if let Some(_line) = line.strip_prefix("createworkspacev2>>") {
-            let workspaces = get_workspaces(&command_socket_path).await.unwrap();
-            let _ = this.update(cx, |this, cx| {
-                this.workspaces = workspaces;
-                cx.notify()
-            });
+        if let Some(line) = line.strip_prefix("createworkspacev2>>") {
+            if let Some((id, name)) = line.split_once(",") {
+                match id.parse() {
+                    Ok(id) => {
+                        let _ = this.update(cx, |this, cx| {
+                            let workspace = WorkspaceInfo { name: name.to_owned() };
+                            match this.workspaces.entry(id) {
+                                btree_map::Entry::Occupied(mut entry) => {
+                                    let old = entry.insert(workspace);
+                                    tracing::warn!("Received a `createworkspacev2` with id = {id} and name = {name}, but there is already an old workspace with name = {}", old.name);
+                                    // TODO: Maybe use try_update_with_get_workspace
+                                }
+                                btree_map::Entry::Vacant(entry) => {
+                                    entry.insert(workspace);
+                                }
+                            }
+                            cx.notify()
+                        });
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to parse the id ({id}) from `createworkspacev2`: {e}"
+                        );
+                        try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                    }
+                }
+            } else {
+                tracing::error!(
+                    "Received a `createworkspacev2` update `{line}`, but it doesn't contain any `,`"
+                );
+                try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+            }
         } else if let Some(line) = line.strip_prefix("destroyworkspacev2>>") {
-            let (id, name) = line.split_once(",").unwrap();
-            let _ = this.update(cx, |this, cx| {
-                let workspace = this.workspaces.remove(&id.parse().unwrap()).unwrap();
-                assert_eq!(workspace.name, name.trim_end());
-                cx.notify()
-            });
+            if let Some((id, name)) = line.split_once(",") {
+                match id.parse() {
+                    Ok(id) => {
+                        let _ = this.update(cx, |this, cx| {
+                            match this.workspaces.entry(id) {
+                                btree_map::Entry::Occupied(entry) => {
+                                    let old = entry.remove();
+                                    if old.name != name {
+                                        tracing::warn!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but the old name is not the same: `{}`", old.name);
+                                    }
+                                }
+                                btree_map::Entry::Vacant(_) => {
+                                    tracing::error!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but there is no workspace with same id");
+                                    // TODO: Maybe use try_update_with_get_workspace
+                                }
+                            }
+                            cx.notify()
+                        });
+                    }
+                    Err(e) => {
+                        tracing::error!(
+                            "Failed to parse the id ({id}) from `destroyworkspacev2`: {e}"
+                        );
+                        try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                    }
+                }
+            } else {
+                tracing::error!(
+                    "Received a `destroyworkspacev2` update `{line}`, but it doesn't contain any `,`"
+                );
+                try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+            }
         } else if let Some(line) = line.strip_prefix("workspacev2>>") {
             let Some((id, _)) = line.split_once(",") else {
-                let _ = this.update(cx, |this, cx| {
-                    this.error_message = Some(format!("error while parsing workspacev2 `{line}`"));
-                    cx.notify()
-                });
+                tracing::error!(
+                    "Received a `workspacev2` update `{line}`, but it doesn't contain any `,`"
+                );
                 continue;
             };
             let id = if id.is_empty() {
@@ -157,11 +199,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 match id.parse() {
                     Ok(x) => Some(x),
                     Err(e) => {
-                        let _ = this.update(cx, |this, cx| {
-                            this.error_message =
-                                Some(format!("error while parsing workspacev2 `{line}`: {e}"));
-                            cx.notify()
-                        });
+                        tracing::error!("Failed to parse the id ({id}) from `workspacev2`: {e}");
                         continue;
                     }
                 }
@@ -173,11 +211,9 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
             });
         } else if let Some(line) = line.strip_prefix("activespecialv2>>") {
             let Some((id, _)) = line.split_once(",") else {
-                let _ = this.update(cx, |this, cx| {
-                    this.error_message =
-                        Some(format!("error while parsing activespecialv2 `{line}`"));
-                    cx.notify()
-                });
+                tracing::error!(
+                    "Received a `activespecialv2` update `{line}`, but it doesn't contain any `,`"
+                );
                 continue;
             };
             let id = if id.is_empty() {
@@ -186,11 +222,9 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 match id.parse() {
                     Ok(x) => Some(x),
                     Err(e) => {
-                        let _ = this.update(cx, |this, cx| {
-                            this.error_message =
-                                Some(format!("error while parsing activespecialv2 `{line}`: {e}"));
-                            cx.notify()
-                        });
+                        tracing::error!(
+                            "Failed to parse the id ({id}) from `activespecialv2`: {e}"
+                        );
                         continue;
                     }
                 }
@@ -201,13 +235,32 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 cx.notify()
             });
         };
+    }
+}
 
-        // if let Some(message) = message {
-        //     let _ = this.update(cx, |this, cx| {
-        //         this.info = message;
-        //         cx.notify()
-        //     });
-        // }
+async fn try_update_with_get_workspace<P>(
+    command_socket_path: P,
+    entity: &WeakEntity<HyprlandWorkspace>,
+    cx: &mut AsyncApp,
+) where
+    P: AsRef<Path> + Display,
+{
+    match get_workspaces(command_socket_path).await {
+        Ok(workspaces) => {
+            let _ = entity.update(cx, |this, cx| {
+                this.workspaces = workspaces;
+                cx.notify()
+            });
+        }
+        Err(e) => {
+            tracing::error!(
+                "Failed to get workspaces from hyprland socket at `command_socket_path`: {e}"
+            );
+            let _ = entity.update(cx, |this, cx| {
+                this.error_message = Some(e);
+                cx.notify()
+            });
+        }
     }
 }
 

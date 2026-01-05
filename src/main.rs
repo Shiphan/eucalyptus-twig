@@ -8,6 +8,7 @@ use gpui::{
     prelude::*,
     px, rems,
 };
+use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::widget::Widget;
 
@@ -18,6 +19,15 @@ const WIDTH: f32 = 1440.0;
 const HEIGHT: f32 = 40.0;
 
 fn main() {
+    tracing_subscriber::registry()
+        .with(tracing_subscriber::fmt::layer())
+        .with(
+            tracing_subscriber::filter::Targets::new()
+                .with_default(tracing::Level::WARN)
+                .with_target(env!("CARGO_CRATE_NAME"), tracing::Level::INFO),
+        )
+        .init();
+
     Application::new().run(|cx: &mut App| {
         gpui_tokio::init(cx);
 
