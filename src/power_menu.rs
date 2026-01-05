@@ -38,16 +38,12 @@ impl PowerMenu {
     pub fn window_options(
         display: Option<impl Deref<Target = impl PlatformDisplay + ?Sized>>,
     ) -> WindowOptions {
-        println!(
-            "window_bounds = {:#?}",
-            display
-                .as_ref()
-                .map(|x| gpui::WindowBounds::Windowed(x.bounds()))
-        );
+        let window_bounds = display
+            .as_ref()
+            .map(|x| gpui::WindowBounds::Windowed(x.bounds()));
+        tracing::info!(?window_bounds);
         WindowOptions {
-            window_bounds: display
-                .as_ref()
-                .map(|x| gpui::WindowBounds::Windowed(x.bounds())),
+            window_bounds,
             titlebar: None,
             kind: WindowKind::LayerShell(LayerShellOptions {
                 namespace: "eucalyptus-twig-power-menu".to_owned(),

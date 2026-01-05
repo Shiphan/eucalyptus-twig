@@ -8,7 +8,7 @@ use gpui::{
     prelude::*,
     px, rems,
 };
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::widget::Widget;
 
@@ -20,7 +20,7 @@ const HEIGHT: f32 = 40.0;
 
 fn main() {
     tracing_subscriber::registry()
-        .with(tracing_subscriber::fmt::layer())
+        .with(tracing_subscriber::fmt::layer().map_fmt_fields(|f| f.debug_alt()))
         .with(
             tracing_subscriber::filter::Targets::new()
                 .with_default(tracing::Level::WARN)
@@ -44,10 +44,10 @@ fn main() {
             cx.update(|cx| {
                 let displays = cx.displays();
 
-                println!("displays: {:#?}", displays);
+                tracing::info!(?displays);
 
                 if displays.len() == 0 {
-                    println!("[WARN] there is no display in the context!!!");
+                    tracing::warn!("there is no display in gpui context");
                 }
 
                 for display in displays {

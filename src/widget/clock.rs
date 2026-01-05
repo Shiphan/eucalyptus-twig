@@ -83,7 +83,7 @@ fn current_time(format_description: &OwnedFormatItem) -> Result<(Div, String), S
                 path.translate(bounds.center());
                 match path.build() {
                     Ok(path) => window.paint_path(path, black()),
-                    Err(e) => println!("Error while building path: {e}"),
+                    Err(e) => tracing::error!(error = %e, "Failed to build path for minute hand"),
                 }
 
                 let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
@@ -98,7 +98,7 @@ fn current_time(format_description: &OwnedFormatItem) -> Result<(Div, String), S
                 path.translate(bounds.center());
                 match path.build() {
                     Ok(path) => window.paint_path(path, black()),
-                    Err(e) => println!("Error while building path: {e}"),
+                    Err(e) => tracing::error!(error = %e, "Failed to build path for hour hand"),
                 }
             },
         )
