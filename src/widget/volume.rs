@@ -53,14 +53,22 @@ impl Render for Volume {
                 .child("󰖁")
         } else {
             if let Some(volume) = self.volume {
+                let volume = volume.cbrt() * 100.0;
                 widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
-                    .child(div().font_family("Material Symbols Rounded").child("󰖀"))
-                    .child(format!("{:.1}", volume.cbrt() * 100.0))
-                // "󰕿 "
-                // "󰖀 "
-                // "󰕾 "
+                    .child(
+                        div()
+                            .font_family("Material Symbols Rounded")
+                            .child(if volume <= 0.0 {
+                                "󰕿"
+                            } else if volume < 50.0 {
+                                "󰖀"
+                            } else {
+                                "󰕾"
+                            }),
+                    )
+                    .child(format!("{:.1}", volume))
             } else {
                 widget_wrapper().child("?")
             }
@@ -93,7 +101,7 @@ async fn task(this: WeakEntity<Volume>, cx: &mut AsyncApp) {
             }
         }
     }
-    println!("exit...");
+    tracing::warn!("No more update from pipewire");
 }
 
 enum Update {
@@ -103,37 +111,65 @@ enum Update {
 }
 
 fn pipewire_thread(tx: UnboundedSender<Update>) {
-    println!("pipewire_thread called");
+    tracing::trace!("pipewire_thread called");
 
     let mainloop = match MainLoopRc::new(None) {
         Ok(x) => x,
         Err(e) => {
-            tx.unbounded_send(Update::ErrorMessage(format!("{} error: {e}", line!())))
-                .unwrap();
+            tracing::error!(
+                error = %e,
+                "Failed to get PipeWire main loop"
+            );
+            if let Err(e) = tx.unbounded_send(Update::ErrorMessage(format!(
+                "Failed to get PipeWire main loop: {e}"
+            ))) {
+                tracing::error!(error = %e, "Failed to send update to ui thread");
+            }
             return;
         }
     };
     let context = match ContextRc::new(&mainloop, None) {
         Ok(x) => x,
         Err(e) => {
-            tx.unbounded_send(Update::ErrorMessage(format!("{} error: {e}", line!())))
-                .unwrap();
+            tracing::error!(
+                error = %e,
+                "Failed to get PipeWire context"
+            );
+            if let Err(e) = tx.unbounded_send(Update::ErrorMessage(format!(
+                "Failed to get PipeWire context: {e}"
+            ))) {
+                tracing::error!(error = %e, "Failed to send update to ui thread");
+            }
             return;
         }
     };
     let core = match context.connect_rc(None) {
         Ok(x) => x,
         Err(e) => {
-            tx.unbounded_send(Update::ErrorMessage(format!("{} error: {e}", line!())))
-                .unwrap();
+            tracing::error!(
+                error = %e,
+                "Failed to get PipeWire core"
+            );
+            if let Err(e) = tx.unbounded_send(Update::ErrorMessage(format!(
+                "Failed to get PipeWire core: {e}"
+            ))) {
+                tracing::error!(error = %e, "Failed to send update to ui thread");
+            }
             return;
         }
     };
     let registry = match core.get_registry_rc() {
         Ok(x) => x,
         Err(e) => {
-            tx.unbounded_send(Update::ErrorMessage(format!("{} error: {e}", line!())))
-                .unwrap();
+            tracing::error!(
+                error = %e,
+                "Failed to get PipeWire registry"
+            );
+            if let Err(e) = tx.unbounded_send(Update::ErrorMessage(format!(
+                "Failed to get PipeWire registry: {e}"
+            ))) {
+                tracing::error!(error = %e, "Failed to send update to ui thread");
+            }
             return;
         }
     };
@@ -150,82 +186,98 @@ fn pipewire_thread(tx: UnboundedSender<Update>) {
         .add_listener_local()
         .global({
             let registry = registry.clone();
+            let mainloop = mainloop.clone();
             move |global| match global.type_ {
                 ObjectType::Node
                     if global.props.and_then(|x| x.get("media.class")) == Some("Audio/Sink") =>
                 {
                     let Some(node_name) = global.props.and_then(|x| x.get("node.name")).map(|x| x.to_owned()) else {
-                        println!(
-                            "we got a node without a name!!: id = {}, props = {:#?}",
-                            global.id, global.props
+                        tracing::warn!(
+                            global.id, ?global.props,
+                            "Got a node without a name"
                         );
                         return;
                     };
-                    let node = registry.bind::<Node, _>(global).unwrap();
+                    let node = match registry.bind::<Node, _>(global){
+                        Ok(x) => x,
+                        Err(e) => {
+                            tracing::error!(error = %e, "Got a node object but failed to convert it to a real node");
+                            return;
+                        }
+                    };
+                    tracing::info!(node_name, "Got a node");
                     let volumes = volumes.clone();
                     let default_sink_name = default_sink_name.clone();
                     let tx = tx.clone();
+                    let mainloop = mainloop.clone();
                     let listener = node
                         .add_listener_local()
                         .param(move |seq, id, index, next, param| {
                             match id {
                                 ParamType::Props => {
+                                    tracing::debug!(
+                                        seq, index, next, param = ?param.map(|x| x.type_()),
+                                        "Node listener (Props)",
+                                    );
                                     if let Some(pod) = param {
-                                        match pod.as_object() {
-                                            Ok(object) => {
-                                                if let Some(prop) = object.find_prop(Id(SPA_PROP_channelVolumes)) {
-                                                    match PodDeserializer::deserialize_from::<Vec<f32>>(prop.value().as_bytes()) {
-                                                        Ok(([], channel_volumes)) => {
-                                                            let volume = channel_volumes.into_iter().reduce(f32::max);
-                                                            if Some(&node_name) == default_sink_name.borrow().as_ref() {
-                                                                tx.unbounded_send(Update::Volume(volume)).unwrap();
-                                                            }
-                                                            volumes
-                                                                .borrow_mut()
-                                                                .entry(node_name.clone())
-                                                                .and_modify(|(_, x)| {*x = volume;})
-                                                                .or_insert((None, volume));
-
-                                                            println!("SPA_PROP_channelVolumes max: {:?}", volume);
-                                                        }
-                                                        Ok((_remain, _)) => {
-                                                                println!("{} error: not all pod used", line!());
-                                                        }
-                                                        Err(e) => {
-                                                            println!("{} error: {e:?}", line!());
+                                        let object = match pod.as_object() {
+                                            Ok(x) => x,
+                                            Err(e) => {
+                                                tracing::warn!(error = %e, pod_type = ?pod.type_(), "Node update sends a pod that is not an object");
+                                                return;
+                                            }
+                                        };
+                                        if let Some(prop) = object.find_prop(Id(pipewire::spa::sys::SPA_PROP_volume)) {
+                                            tracing::info!(node_name, SPA_PROP_volume = ?prop.value().get_float());
+                                        }
+                                        if let Some(prop) = object.find_prop(Id(SPA_PROP_channelVolumes)) {
+                                            match PodDeserializer::deserialize_from::<Vec<f32>>(prop.value().as_bytes()) {
+                                                Ok(([], channel_volumes)) => {
+                                                    tracing::info!(node_name, SPA_PROP_channelVolumes = ?channel_volumes);
+                                                    let volume = channel_volumes.into_iter().reduce(f32::max);
+                                                    if Some(&node_name) == default_sink_name.borrow().as_ref() {
+                                                        if let Err(e) = tx.unbounded_send(Update::Volume(volume)) {
+                                                            tracing::warn!(error = %e, "Failed to send update to ui thread");
+                                                            mainloop.quit();
                                                         }
                                                     }
+                                                    volumes
+                                                        .borrow_mut()
+                                                        .entry(node_name.clone())
+                                                        .and_modify(|(_, x)| {*x = volume;})
+                                                        .or_insert((None, volume));
                                                 }
-                                                if let Some(prop) = object.find_prop(Id(SPA_PROP_mute)) {
-                                                    match prop.value().get_bool() {
-                                                        Ok(mute) => {
-                                                            if Some(&node_name) == default_sink_name.borrow().as_ref() {
-                                                                tx.unbounded_send(Update::Mute(Some(mute))).unwrap();
-                                                            }
-                                                            volumes.borrow_mut().entry(node_name.clone()).and_modify(|(x, _)| {*x = Some(mute);}).or_insert((Some(mute), None));
-
-                                                            println!("SPA_PROP_mute: {}", mute);
-                                                        }
-                                                        Err(e) => {
-                                                            println!("{} error: {e:?}", line!());
-                                                        }
-                                                    }
+                                                Ok((remain, _)) => {
+                                                    tracing::error!("Failed to parse SPA_PROP_channelVolumes as array of f32: {} bytes left", remain.len());
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!(error = ?e, "Failed to parse SPA_PROP_channelVolumes as array of f32");
                                                 }
                                             }
-                                            Err(e) => {
-                                                println!("{} error: {e}", line!());
+                                        }
+                                        if let Some(prop) = object.find_prop(Id(SPA_PROP_mute)) {
+                                            match prop.value().get_bool() {
+                                                Ok(mute) => {
+                                                    tracing::info!(node_name, SPA_PROP_mute = mute);
+                                                    if Some(&node_name) == default_sink_name.borrow().as_ref() {
+                                                        if let Err(e) = tx.unbounded_send(Update::Mute(Some(mute))) {
+                                                            tracing::warn!(error = %e, "Failed to send update to ui thread");
+                                                            mainloop.quit();
+                                                        }
+                                                    }
+                                                    volumes.borrow_mut().entry(node_name.clone()).and_modify(|(x, _)| {*x = Some(mute);}).or_insert((Some(mute), None));
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!(error = ?e, "Failed to parse SPA_PROP_mute as bool");
+                                                }
                                             }
                                         }
                                     }
-                                    println!(
-                                        "node listener (Props!!!): {:#?}",
-                                        (seq, index, next, param.is_some())
-                                    )
                                 }
                                 _ => {
-                                    println!(
-                                        "node listener: {:#?}",
-                                        (seq, id, index, next, param.map(|x| x.as_bytes()))
+                                    tracing::trace!(
+                                        seq, index, next, param = ?param.map(|x| x.type_()),
+                                        "Node listener"
                                     )
                                 }
                             }
@@ -234,51 +286,63 @@ fn pipewire_thread(tx: UnboundedSender<Update>) {
                     node.subscribe_params(&[ParamType::Props]);
 
                     listeners.borrow_mut().push((Box::new(node), Box::new(listener)));
-                    println!("listeners count = {}", listeners.borrow().len());
+                    tracing::info!(listeners_count = listeners.borrow().len());
                 }
                 ObjectType::Metadata
                     if global.props.and_then(|x| x.get("metadata.name")) == Some("default") =>
                 {
-                    println!("metadata = {global:#?}");
-                    let metadata = registry.bind::<Metadata, _>(global).unwrap();
+                    let metadata = match registry.bind::<Metadata, _>(global) {
+                        Ok(x) => x,
+                        Err(e) => {
+                            tracing::error!(error = %e, "Got a Metadata object but failed to convert it to a real Metadate");
+                            return;
+                        }
+                    };
                     let default_sink_name = default_sink_name.clone();
                     let tx = tx.clone();
                     let volumes = volumes.clone();
+                    let mainloop = mainloop.clone();
                     let listener = metadata
                         .add_listener_local()
                         .property(move |subject, key, type_, value| {
+                            // TODO: what is this subject parameter
+                            tracing::debug!(subject, key, type_, value, "Metadata listener");
                             match (key, type_, value) {
                                 (Some("default.audio.sink"), Some("Spa:String:JSON"), Some(value)) => {
                                     match serde_json::from_str::<DefaultAudioSink>(value) {
                                         Ok(value) => {
-                                            println!("metadata listener (update): {:#?}", (subject, &value.name));
+                                            tracing::info!(new = value.name, "Update default sink");
                                             let (mute, volume) = volumes.borrow().get(&value.name).copied().unwrap_or((None, None));
-                                            tx.unbounded_send(Update::Mute(mute)).unwrap();
-                                            tx.unbounded_send(Update::Volume(volume)).unwrap();
+                                            if let Err(e) = tx.unbounded_send(Update::Mute(mute)) {
+                                                tracing::warn!(error = %e, "Failed to send update to ui thread");
+                                                mainloop.quit();
+                                            }
+                                            if let Err(e) = tx.unbounded_send(Update::Volume(volume)) {
+                                                tracing::warn!(error = %e, "Failed to send update to ui thread");
+                                                mainloop.quit();
+                                            }
                                             *default_sink_name.borrow_mut() = Some(value.name);
                                         }
                                         Err(e) => {
-                                            println!("metadata listener (default.audio.sink w/ error): {:#?}", (subject, key, type_, value, e));
+                                            tracing::error!(error = %e, "Got an update for default.audio.sink with type json, but failed to parse it");
                                         }
                                     }
                                 }
                                 (Some("default.audio.sink"), _, None) | (None, _, _) => {
-                                    println!("metadata listener (remove): {:#?}", (subject));
+                                    tracing::info!(key, value, "Remove default.audio.sink property");
                                     *default_sink_name.borrow_mut() = None;
                                 }
                                 (Some("default.audio.sink"), _, _) => {
-                                    println!("metadata listener (default.audio.sink): {:#?}", (subject, key, type_, value));
+                                    tracing::warn!(type_, value, "Got an update for default.audio.sink, but with unexpected type or value");
                                 }
-                                _ => {
-                                    println!("metadata listener: {:#?}", (subject, key, type_, value));
-                                }
+                                _ => (),
                             }
-                            0
+                            0 // TODO: what is this return value?
                         })
                         .register();
 
                     listeners.borrow_mut().push((Box::new(metadata), Box::new(listener)));
-                    println!("listeners count = {}", listeners.borrow().len());
+                    tracing::info!(listeners_count = listeners.borrow().len());
                 }
                 _ => (),
             }
@@ -287,7 +351,7 @@ fn pipewire_thread(tx: UnboundedSender<Update>) {
 
     mainloop.run();
 
-    println!("pipewire mainloop end");
+    tracing::warn!("pipewire mainloop end");
 }
 
 #[derive(Deserialize)]
