@@ -79,6 +79,7 @@ impl Bar {
             right: vec![
                 cx.new(widget::Volume::new).into(),
                 cx.new(widget::Bluetooth::new).into(),
+                cx.new(widget::PowerProfile::new).into(),
                 cx.new(widget::Quit::new).into(),
             ],
         })

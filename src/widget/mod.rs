@@ -5,6 +5,7 @@ pub use clock::Clock;
 pub use display::Display;
 pub use hyprland::workspaces::HyprlandWorkspace;
 pub use power_menu::PowerMenu;
+pub use power_profile::PowerProfile;
 pub use quit::Quit;
 pub use volume::Volume;
 
@@ -13,6 +14,7 @@ pub mod clock;
 pub mod display;
 pub mod hyprland;
 pub mod power_menu;
+pub mod power_profile;
 pub mod quit;
 pub mod volume;
 
