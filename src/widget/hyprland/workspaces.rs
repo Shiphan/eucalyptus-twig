@@ -243,7 +243,7 @@ async fn try_update_with_get_workspace<P>(
     entity: &WeakEntity<HyprlandWorkspace>,
     cx: &mut AsyncApp,
 ) where
-    P: AsRef<Path> + Display,
+    P: AsRef<Path> + Display + Copy,
 {
     match get_workspaces(command_socket_path).await {
         Ok(workspaces) => {
@@ -254,7 +254,7 @@ async fn try_update_with_get_workspace<P>(
         }
         Err(e) => {
             tracing::error!(
-                "Failed to get workspaces from hyprland socket at `command_socket_path`: {e}"
+                "Failed to get workspaces from hyprland socket at `{command_socket_path}`: {e}"
             );
             let _ = entity.update(cx, |this, cx| {
                 this.error_message = Some(e);
