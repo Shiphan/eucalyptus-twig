@@ -72,6 +72,7 @@ impl Bar {
         cx.new(|cx| Self {
             left: vec![
                 cx.new(widget::PowerMenu::new).into(),
+                cx.new(widget::Power::new).into(),
                 cx.new(widget::Clock::new).into(),
                 cx.new(widget::Display::new).into(),
             ],
