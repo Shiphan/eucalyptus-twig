@@ -200,7 +200,7 @@ async fn try_monitor_device(
                 ) => {
                     let _ = entity.update(cx, |this, cx| {
                         let was_connected = if connected {
-                            this.connected_devices.insert(address)
+                            !this.connected_devices.insert(address)
                         } else {
                             this.connected_devices.remove(&address)
                         };
