@@ -51,27 +51,25 @@ impl Render for Volume {
             widget_wrapper()
                 .font_family("Material Symbols Rounded")
                 .child("󰖁")
+        } else if let Some(volume) = self.volume {
+            let volume = volume.cbrt() * 100.0;
+            widget_wrapper()
+                .flex()
+                .gap(rems(0.25))
+                .child(
+                    div()
+                        .font_family("Material Symbols Rounded")
+                        .child(if volume <= 0.0 {
+                            "󰕿"
+                        } else if volume < 50.0 {
+                            "󰖀"
+                        } else {
+                            "󰕾"
+                        }),
+                )
+                .child(format!("{:.1}", volume))
         } else {
-            if let Some(volume) = self.volume {
-                let volume = volume.cbrt() * 100.0;
-                widget_wrapper()
-                    .flex()
-                    .gap(rems(0.25))
-                    .child(
-                        div()
-                            .font_family("Material Symbols Rounded")
-                            .child(if volume <= 0.0 {
-                                "󰕿"
-                            } else if volume < 50.0 {
-                                "󰖀"
-                            } else {
-                                "󰕾"
-                            }),
-                    )
-                    .child(format!("{:.1}", volume))
-            } else {
-                widget_wrapper().child("?")
-            }
+            widget_wrapper().child("?")
         }
     }
 }
