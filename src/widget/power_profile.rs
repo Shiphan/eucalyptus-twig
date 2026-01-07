@@ -79,12 +79,25 @@ async fn task(this: WeakEntity<PowerProfile>, cx: &mut AsyncApp) {
     tracing::warn!("Receive ActiveProfile stream ended");
 }
 
+// <https://upower.pages.freedesktop.org/power-profiles-daemon/gdbus-org.freedesktop.UPower.PowerProfiles.html>
 #[proxy(
     interface = "org.freedesktop.UPower.PowerProfiles",
     default_service = "org.freedesktop.UPower.PowerProfiles",
     default_path = "/org/freedesktop/UPower/PowerProfiles"
 )]
 trait PowerProfiles {
+    fn hold_profile(
+        &self,
+        profile: String,
+        reason: String,
+        application_id: String,
+    ) -> zbus::Result<u32>;
+    fn release_profile(&self, cookie: u32) -> zbus::Result<()>;
+    fn set_action_enabled(&self, action: String, enabled: bool) -> zbus::Result<()>;
+
+    #[zbus(signal)]
+    fn profile_released(&self, cookie: u32) -> zbus::Result<()>;
+
     #[zbus(property)]
     fn active_profile(&self) -> zbus::Result<String>;
     #[zbus(property)]
