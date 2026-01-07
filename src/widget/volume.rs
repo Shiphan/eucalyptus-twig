@@ -227,7 +227,7 @@ fn pipewire_thread(tx: UnboundedSender<Update>) {
                     let metadata = match registry.bind::<Metadata, _>(global) {
                         Ok(x) => x,
                         Err(e) => {
-                            tracing::error!(error = %e, "Got a Metadata object but failed to convert it to a real Metadate");
+                            tracing::error!(error = %e, "Got a Metadata object but failed to convert it to a real Metadata");
                             return;
                         }
                     };
