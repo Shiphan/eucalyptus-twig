@@ -152,7 +152,7 @@ async fn task(this: WeakEntity<Workspaces>, cx: &mut AsyncApp) {
                     this.error_message = Some(e);
                 }
             }
-            cx.notify()
+            cx.notify();
         });
     }
 }

@@ -82,19 +82,19 @@ async fn task(this: WeakEntity<Volume>, cx: &mut AsyncApp) {
             Update::Volume(volume) => {
                 let _ = this.update(cx, |this, cx| {
                     this.volume = volume;
-                    cx.notify()
+                    cx.notify();
                 });
             }
             Update::Mute(mute) => {
                 let _ = this.update(cx, |this, cx| {
                     this.mute = mute;
-                    cx.notify()
+                    cx.notify();
                 });
             }
             Update::ErrorMessage(e) => {
                 let _ = this.update(cx, |this, cx| {
                     this.error_message = Some(e);
-                    cx.notify()
+                    cx.notify();
                 });
             }
         }
@@ -346,7 +346,7 @@ fn node_listener(
             tracing::trace!(
                 seq, index, next, param = ?param.map(|x| x.type_()),
                 "Node listener"
-            )
+            );
         }
     }
 }

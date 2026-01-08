@@ -61,7 +61,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             tracing::error!(error = %e, "Failed to get default bluetooth adapter");
             let _ = this.update(cx, |this, cx| {
                 this.error_message = Some(format!("Failed to get default bluetooth adapter: {e}"));
-                cx.notify()
+                cx.notify();
             });
             return;
         }
@@ -72,7 +72,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             tracing::info!(is_powered, "Adapter property");
             let _ = this.update(cx, |this, cx| {
                 this.powered = Some(is_powered);
-                cx.notify()
+                cx.notify();
             });
         }
         Err(e) => {
@@ -84,7 +84,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             tracing::info!(discovering, "Adapter property");
             let _ = this.update(cx, |this, cx| {
                 this.discovering = Some(discovering);
-                cx.notify()
+                cx.notify();
             });
         }
         Err(e) => {
@@ -109,7 +109,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
                 this.error_message = Some(format!(
                     "Failed to get event stream of default adapter: {e}"
                 ));
-                cx.notify()
+                cx.notify();
             });
             return;
         }
@@ -124,21 +124,21 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
                 let _ = this.update(cx, |this, cx| {
                     let was_connected = this.connected_devices.remove(&address);
                     tracing::info!(%address, was_connected, "Removed a device");
-                    cx.notify()
+                    cx.notify();
                 });
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Powered(powered)) => {
                 tracing::info!(powered, "Adapter property changed");
                 let _ = this.update(cx, |this, cx| {
                     this.powered = Some(powered);
-                    cx.notify()
+                    cx.notify();
                 });
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Discovering(discovering)) => {
                 tracing::info!(discovering, "Adapter property changed");
                 let _ = this.update(cx, |this, cx| {
                     this.discovering = Some(discovering);
-                    cx.notify()
+                    cx.notify();
                 });
             }
             _ => (),
@@ -195,7 +195,7 @@ async fn try_monitor_device(
                             this.connected_devices.remove(&address)
                         };
                         tracing::info!(%address, connected, was_connected, "Device property changed");
-                        cx.notify()
+                        cx.notify();
                     });
                 }
                 _ => (),

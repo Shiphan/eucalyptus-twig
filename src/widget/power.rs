@@ -128,7 +128,7 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
         Err(e) => {
             let _ = this.update(cx, |this, cx| {
                 this.error_message = Some(format!("Failed to connect to system bus: {e}"));
-                cx.notify()
+                cx.notify();
             });
             tracing::error!(error = %e, "Failed to connect to system bus");
             return;
@@ -142,7 +142,7 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
             Err(e) => {
                 let _ = this.update(cx, |this, cx| {
                     this.error_message = Some(format!("Failed to create properties proxy: {e}"));
-                    cx.notify()
+                    cx.notify();
                 });
                 tracing::error!(error = %e, "Failed to create properties proxy");
                 return;

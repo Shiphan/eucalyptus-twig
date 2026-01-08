@@ -71,7 +71,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 this.error_message = Some(format!(
                     "error while getting HYPRLAND_INSTANCE_SIGNATURE: {e}"
                 ));
-                cx.notify()
+                cx.notify();
             });
             return;
         }
@@ -83,7 +83,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
             // <https://github.com/hyprwm/Hyprland/blob/main/hyprctl/src/main.cpp>
             let _ = this.update(cx, |this, cx| {
                 this.error_message = Some(format!("error while getting XDG_RUNTIME_DIR: {e}"));
-                cx.notify()
+                cx.notify();
             });
             return;
         }
@@ -99,7 +99,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 this.error_message = Some(format!(
                     "error while connecting to hyprland socket ({event_socket_path}): {e}"
                 ));
-                cx.notify()
+                cx.notify();
             });
             return;
         }
@@ -114,7 +114,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
             Err(e) => {
                 let _ = this.update(cx, |this, cx| {
                     this.error_message = Some(format!("error while reading the socket: {e}"));
-                    cx.notify()
+                    cx.notify();
                 });
                 break;
             }
@@ -137,7 +137,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                                     entry.insert(workspace);
                                 }
                             }
-                            cx.notify()
+                            cx.notify();
                         });
                     }
                     Err(e) => {
@@ -170,7 +170,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                                     // TODO: Maybe use try_update_with_get_workspace
                                 }
                             }
-                            cx.notify()
+                            cx.notify();
                         });
                     }
                     Err(e) => {
@@ -207,7 +207,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
 
             let _ = this.update(cx, |this, cx| {
                 this.active_workspace = id;
-                cx.notify()
+                cx.notify();
             });
         } else if let Some(line) = line.strip_prefix("activespecialv2>>") {
             let Some((id, _)) = line.split_once(",") else {
@@ -232,7 +232,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
 
             let _ = this.update(cx, |this, cx| {
                 this.active_special_workspace = id;
-                cx.notify()
+                cx.notify();
             });
         };
     }
@@ -249,7 +249,7 @@ async fn try_update_with_get_workspace<P>(
         Ok(workspaces) => {
             let _ = entity.update(cx, |this, cx| {
                 this.workspaces = workspaces;
-                cx.notify()
+                cx.notify();
             });
         }
         Err(e) => {
@@ -258,7 +258,7 @@ async fn try_update_with_get_workspace<P>(
             );
             let _ = entity.update(cx, |this, cx| {
                 this.error_message = Some(e);
-                cx.notify()
+                cx.notify();
             });
         }
     }

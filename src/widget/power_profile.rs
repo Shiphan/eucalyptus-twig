@@ -44,7 +44,7 @@ async fn task(this: WeakEntity<PowerProfile>, cx: &mut AsyncApp) {
         Err(e) => {
             let _ = this.update(cx, |this, cx| {
                 this.error_message = Some(format!("Failed to connect to system bus: {e}"));
-                cx.notify()
+                cx.notify();
             });
             tracing::error!(error = %e, "Failed to connect to system bus");
             return;
@@ -55,7 +55,7 @@ async fn task(this: WeakEntity<PowerProfile>, cx: &mut AsyncApp) {
         Err(e) => {
             let _ = this.update(cx, |this, cx| {
                 this.error_message = Some(format!("Failed to create properties proxy: {e}"));
-                cx.notify()
+                cx.notify();
             });
             tracing::error!(error = %e, "Failed to create properties proxy");
             return;
@@ -68,7 +68,7 @@ async fn task(this: WeakEntity<PowerProfile>, cx: &mut AsyncApp) {
                 tracing::info!(active_profile, "Power profile changed");
                 let _ = this.update(cx, |this, cx| {
                     this.active_profile = Some(active_profile);
-                    cx.notify()
+                    cx.notify();
                 });
             }
             Err(e) => {
