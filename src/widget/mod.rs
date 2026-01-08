@@ -9,6 +9,7 @@ pub use power_menu::PowerMenu;
 pub use power_profile::PowerProfile;
 pub use quit::Quit;
 pub use volume::Volume;
+pub use workspaces::Workspaces;
 
 pub mod bluetooth;
 pub mod clock;
@@ -19,6 +20,7 @@ pub mod power_menu;
 pub mod power_profile;
 pub mod quit;
 pub mod volume;
+pub mod workspaces;
 
 pub fn widget_wrapper() -> Div {
     div()

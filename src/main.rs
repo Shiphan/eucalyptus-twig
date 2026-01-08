@@ -54,8 +54,7 @@ fn main() {
                     cx.open_window(Bar::window_options(Some(display)), Bar::build_root_view)
                         .unwrap();
                 }
-            })
-            .unwrap();
+            });
         })
         .detach();
     });
@@ -76,7 +75,10 @@ impl Bar {
                 cx.new(widget::Clock::new).into(),
                 cx.new(widget::Display::new).into(),
             ],
-            center: vec![cx.new(widget::HyprlandWorkspace::new).into()],
+            center: vec![
+                // cx.new(widget::Workspaces::new).into(),
+                cx.new(widget::HyprlandWorkspace::new).into(),
+            ],
             right: vec![
                 cx.new(widget::Volume::new).into(),
                 cx.new(widget::Bluetooth::new).into(),

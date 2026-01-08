@@ -52,17 +52,7 @@ impl Render for Bluetooth {
 }
 
 async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
-    let handle = match cx.update(|cx| Tokio::handle(cx)) {
-        Ok(x) => x,
-        Err(e) => {
-            tracing::error!(error = %e, "Failed to get tokio handle, which is required for bluer crate to work");
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("Failed to get tokio handle: {e}"));
-                cx.notify()
-            });
-            return;
-        }
-    };
+    let handle = cx.update(|cx| Tokio::handle(cx));
     let _guard = handle.enter();
 
     let adapter = match default_adapter().await {
