@@ -1,4 +1,5 @@
-use gpui::{Context, Div, Render, Styled, black, div, white};
+use gpui::{AnyView, AppContext, Context, Div, Render, Styled, black, div, white};
+use serde::Deserialize;
 
 pub use bluetooth::Bluetooth;
 pub use clock::Clock;
@@ -21,6 +22,39 @@ pub mod power_profile;
 pub mod quit;
 pub mod volume;
 pub mod workspaces;
+
+// TODO: unify widget naming, like Workspaces or Workspace
+
+#[derive(Deserialize)]
+pub enum WidgetOption {
+    Bluetooth,
+    Clock,
+    Display,
+    HyprlandWorkspace,
+    Power,
+    PowerMenu,
+    PowerProfile,
+    Quit,
+    Volume,
+    Workspaces,
+}
+
+impl WidgetOption {
+    pub fn build(&self, cx: &mut impl AppContext) -> AnyView {
+        match self {
+            Self::Bluetooth => cx.new(Bluetooth::new).into(),
+            Self::Clock => cx.new(Clock::new).into(),
+            Self::Display => cx.new(Display::new).into(),
+            Self::HyprlandWorkspace => cx.new(HyprlandWorkspace::new).into(),
+            Self::Power => cx.new(Power::new).into(),
+            Self::PowerMenu => cx.new(PowerMenu::new).into(),
+            Self::PowerProfile => cx.new(PowerProfile::new).into(),
+            Self::Quit => cx.new(Quit::new).into(),
+            Self::Volume => cx.new(Volume::new).into(),
+            Self::Workspaces => cx.new(Workspaces::new).into(),
+        }
+    }
+}
 
 pub fn widget_wrapper() -> Div {
     div()

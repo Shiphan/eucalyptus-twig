@@ -10,8 +10,9 @@ use gpui::{
 };
 use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::widget::Widget;
+use crate::config::Config;
 
+mod config;
 mod power_menu;
 mod widget;
 
@@ -28,10 +29,18 @@ fn main() {
         )
         .init();
 
-    Application::new().run(|cx: &mut App| {
+    let config = match Config::load() {
+        Ok(x) => x,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to load config, fallback to default");
+            Config::default()
+        }
+    };
+
+    Application::new().run(move |cx: &mut App| {
         gpui_tokio::init(cx);
 
-        cx.spawn(async |cx| {
+        cx.spawn(async move |cx| {
             // TODO: by default, gpui will not wait for wayland to tell us displays information
             // wait 10 poll for wayland to tell us all screens
             PollCounter::new(10).await;
@@ -51,8 +60,10 @@ fn main() {
                 }
 
                 for display in displays {
-                    cx.open_window(Bar::window_options(Some(display)), Bar::build_root_view)
-                        .unwrap();
+                    cx.open_window(Bar::window_options(Some(display)), |window, cx| {
+                        Bar::build_root_view(window, cx, &config)
+                    })
+                    .unwrap();
                 }
             });
         })
@@ -62,29 +73,16 @@ fn main() {
 
 struct Bar {
     left: Vec<AnyView>,
-    center: Vec<AnyView>,
+    middle: Vec<AnyView>,
     right: Vec<AnyView>,
 }
 
 impl Bar {
-    pub fn build_root_view(_window: &mut Window, cx: &mut App) -> Entity<Self> {
+    pub fn build_root_view(_window: &mut Window, cx: &mut App, config: &Config) -> Entity<Self> {
         cx.new(|cx| Self {
-            left: vec![
-                cx.new(widget::PowerMenu::new).into(),
-                cx.new(widget::Power::new).into(),
-                cx.new(widget::Clock::new).into(),
-                cx.new(widget::Display::new).into(),
-            ],
-            center: vec![
-                // cx.new(widget::Workspaces::new).into(),
-                cx.new(widget::HyprlandWorkspace::new).into(),
-            ],
-            right: vec![
-                cx.new(widget::Volume::new).into(),
-                cx.new(widget::Bluetooth::new).into(),
-                cx.new(widget::PowerProfile::new).into(),
-                cx.new(widget::Quit::new).into(),
-            ],
+            left: config.left.iter().map(|x| x.build(cx)).collect(),
+            middle: config.middle.iter().map(|x| x.build(cx)).collect(),
+            right: config.right.iter().map(|x| x.build(cx)).collect(),
         })
     }
     pub fn window_options(
@@ -146,7 +144,7 @@ impl Render for Bar {
                     .gap(rems(0.25))
                     .children(self.left.clone()),
             )
-            .child(div().flex().gap(rems(0.25)).children(self.center.clone()))
+            .child(div().flex().gap(rems(0.25)).children(self.middle.clone()))
             .child(
                 div()
                     .flex_grow()
