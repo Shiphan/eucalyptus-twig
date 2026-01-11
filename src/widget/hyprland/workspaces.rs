@@ -26,7 +26,9 @@ pub struct HyprlandWorkspace {
 }
 
 impl Widget for HyprlandWorkspace {
-    fn new(cx: &mut Context<Self>) -> Self {
+    type Config = ();
+
+    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
         cx.spawn(info).detach();
 
         Self {

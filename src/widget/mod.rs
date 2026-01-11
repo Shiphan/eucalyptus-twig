@@ -1,5 +1,5 @@
 use gpui::{AnyView, AppContext, Context, Div, Render, Styled, black, div, white};
-use serde::Deserialize;
+use serde::{Deserialize, de::DeserializeOwned};
 
 pub use bluetooth::Bluetooth;
 pub use clock::Clock;
@@ -11,6 +11,8 @@ pub use power_profile::PowerProfile;
 pub use quit::Quit;
 pub use volume::Volume;
 pub use workspaces::Workspaces;
+
+use crate::config::Config;
 
 pub mod bluetooth;
 pub mod clock;
@@ -40,18 +42,18 @@ pub enum WidgetOption {
 }
 
 impl WidgetOption {
-    pub fn build(&self, cx: &mut impl AppContext) -> AnyView {
+    pub fn build(&self, cx: &mut impl AppContext, config: &Config) -> AnyView {
         match self {
-            Self::Bluetooth => cx.new(Bluetooth::new).into(),
-            Self::Clock => cx.new(Clock::new).into(),
-            Self::Display => cx.new(Display::new).into(),
-            Self::HyprlandWorkspace => cx.new(HyprlandWorkspace::new).into(),
-            Self::Power => cx.new(Power::new).into(),
-            Self::PowerMenu => cx.new(PowerMenu::new).into(),
-            Self::PowerProfile => cx.new(PowerProfile::new).into(),
-            Self::Quit => cx.new(Quit::new).into(),
-            Self::Volume => cx.new(Volume::new).into(),
-            Self::Workspaces => cx.new(Workspaces::new).into(),
+            Self::Bluetooth => cx.new(|cx| Bluetooth::new(cx, &())).into(),
+            Self::Clock => cx.new(|cx| Clock::new(cx, &config.widget.clock)).into(),
+            Self::Display => cx.new(|cx| Display::new(cx, &())).into(),
+            Self::HyprlandWorkspace => cx.new(|cx| HyprlandWorkspace::new(cx, &())).into(),
+            Self::Power => cx.new(|cx| Power::new(cx, &())).into(),
+            Self::PowerMenu => cx.new(|cx| PowerMenu::new(cx, &())).into(),
+            Self::PowerProfile => cx.new(|cx| PowerProfile::new(cx, &())).into(),
+            Self::Quit => cx.new(|cx| Quit::new(cx, &())).into(),
+            Self::Volume => cx.new(|cx| Volume::new(cx, &())).into(),
+            Self::Workspaces => cx.new(|cx| Workspaces::new(cx, &())).into(),
         }
     }
 }
@@ -66,5 +68,7 @@ pub fn widget_wrapper() -> Div {
 }
 
 pub trait Widget: Render {
-    fn new(cx: &mut Context<Self>) -> Self;
+    type Config: Default + DeserializeOwned;
+
+    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self;
 }

@@ -8,7 +8,9 @@ use crate::widget::{Widget, widget_wrapper};
 pub struct PowerMenu;
 
 impl Widget for PowerMenu {
-    fn new(_cx: &mut Context<Self>) -> Self {
+    type Config = ();
+
+    fn new(_cx: &mut Context<Self>, _config: &Self::Config) -> Self {
         Self
     }
 }

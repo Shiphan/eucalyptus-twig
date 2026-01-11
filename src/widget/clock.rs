@@ -5,6 +5,7 @@ use gpui::{
     Styled, Window, black, canvas, div, point, px, rems, white,
 };
 use lyon::path::LineCap;
+use serde::Deserialize;
 use time::{
     OffsetDateTime, Time,
     error::InvalidFormatDescription,
@@ -18,11 +19,10 @@ pub struct Clock {
 }
 
 impl Widget for Clock {
-    fn new(cx: &mut Context<Self>) -> Self {
-        let format_description = format_description::parse_owned::<2>(
-            "[month padding:none repr:numerical]/[day padding:none] [weekday repr:short] [hour padding:none repr:12]:[minute padding:zero] [period case:upper]",
-        );
+    type Config = ClockConfig;
 
+    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
+        let format_description = format_description::parse_owned::<2>(&config.format);
         if format_description.is_ok() {
             cx.spawn(async move |this, cx| {
                 loop {
@@ -61,6 +61,24 @@ impl Render for Clock {
             Err(e) => widget_wrapper().child(e),
         }
     }
+}
+
+#[derive(Deserialize)]
+pub struct ClockConfig {
+    #[serde(default = "default_format_string")]
+    format: String,
+}
+
+impl Default for ClockConfig {
+    fn default() -> Self {
+        Self {
+            format: default_format_string(),
+        }
+    }
+}
+
+fn default_format_string() -> String {
+    "[month padding:none repr:numerical]/[day padding:none] [weekday repr:short] [hour padding:none repr:12]:[minute padding:zero] [period case:upper]".to_owned()
 }
 
 // TODO: maybe we should use icu4x for localized formatting?

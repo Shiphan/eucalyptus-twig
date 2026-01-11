@@ -28,7 +28,9 @@ pub struct Workspaces {
 }
 
 impl Widget for Workspaces {
-    fn new(cx: &mut Context<Self>) -> Self {
+    type Config = ();
+
+    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
         cx.spawn(task).detach();
 
         Self {

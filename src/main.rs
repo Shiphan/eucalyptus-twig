@@ -80,9 +80,9 @@ struct Bar {
 impl Bar {
     pub fn build_root_view(_window: &mut Window, cx: &mut App, config: &Config) -> Entity<Self> {
         cx.new(|cx| Self {
-            left: config.left.iter().map(|x| x.build(cx)).collect(),
-            middle: config.middle.iter().map(|x| x.build(cx)).collect(),
-            right: config.right.iter().map(|x| x.build(cx)).collect(),
+            left: config.left.iter().map(|x| x.build(cx, config)).collect(),
+            middle: config.middle.iter().map(|x| x.build(cx, config)).collect(),
+            right: config.right.iter().map(|x| x.build(cx, config)).collect(),
         })
     }
     pub fn window_options(

@@ -22,7 +22,9 @@ pub struct Power {
 }
 
 impl Widget for Power {
-    fn new(cx: &mut Context<Self>) -> Self {
+    type Config = ();
+
+    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
         cx.spawn(task).detach();
 
         Self {

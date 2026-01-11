@@ -2,7 +2,7 @@ use std::{env, error::Error, fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::widget::WidgetOption;
+use crate::widget::{WidgetOption, clock::ClockConfig};
 
 #[derive(Deserialize)]
 pub struct Config {
@@ -12,6 +12,8 @@ pub struct Config {
     pub middle: Vec<WidgetOption>,
     #[serde(default)]
     pub right: Vec<WidgetOption>,
+    #[serde(default)]
+    pub widget: WidgetConfig,
 }
 
 impl Default for Config {
@@ -29,6 +31,7 @@ impl Default for Config {
                 WidgetOption::Bluetooth,
                 WidgetOption::PowerProfile,
             ],
+            widget: WidgetConfig::default(),
         }
     }
 }
@@ -58,4 +61,10 @@ impl Config {
         let config_content = fs::read(path)?;
         Ok(toml::from_slice(&config_content)?)
     }
+}
+
+#[derive(Deserialize, Default)]
+pub struct WidgetConfig {
+    #[serde(default)]
+    pub clock: ClockConfig,
 }

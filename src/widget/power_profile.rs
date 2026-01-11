@@ -10,7 +10,9 @@ pub struct PowerProfile {
 }
 
 impl Widget for PowerProfile {
-    fn new(cx: &mut Context<Self>) -> Self {
+    type Config = ();
+
+    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
         cx.spawn(task).detach();
 
         Self {
