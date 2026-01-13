@@ -5,6 +5,7 @@ use serde::Deserialize;
 use crate::widget::{WidgetOption, clock::ClockConfig};
 
 #[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
     pub left: Vec<WidgetOption>,
@@ -64,6 +65,7 @@ impl Config {
 }
 
 #[derive(Deserialize, Default)]
+#[serde(deny_unknown_fields)]
 pub struct WidgetConfig {
     #[serde(default)]
     pub clock: ClockConfig,
