@@ -9,6 +9,7 @@ pub use power::Power;
 pub use power_menu::PowerMenu;
 pub use power_profile::PowerProfile;
 pub use quit::Quit;
+pub use system_information::SystemInformation;
 pub use volume::Volume;
 pub use workspaces::Workspaces;
 
@@ -22,6 +23,7 @@ pub mod power;
 pub mod power_menu;
 pub mod power_profile;
 pub mod quit;
+pub mod system_information;
 pub mod volume;
 pub mod workspaces;
 
@@ -37,6 +39,7 @@ pub enum WidgetOption {
     PowerMenu,
     PowerProfile,
     Quit,
+    SystemInformation,
     Volume,
     Workspaces,
 }
@@ -54,6 +57,9 @@ impl WidgetOption {
                 .new(|cx| PowerProfile::new(cx, &config.widget.power_profile))
                 .into(),
             Self::Quit => cx.new(|cx| Quit::new(cx, &())).into(),
+            Self::SystemInformation => cx
+                .new(|cx| SystemInformation::new(cx, &config.widget.system_information))
+                .into(),
             Self::Volume => cx.new(|cx| Volume::new(cx, &())).into(),
             Self::Workspaces => cx.new(|cx| Workspaces::new(cx, &())).into(),
         }

@@ -2,7 +2,10 @@ use std::{env, error::Error, fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::widget::{WidgetOption, clock::ClockConfig, power_profile::PowerProfileConfig};
+use crate::widget::{
+    WidgetOption, clock::ClockConfig, power_profile::PowerProfileConfig,
+    system_information::SystemInformationConfig,
+};
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -71,4 +74,6 @@ pub struct WidgetConfig {
     pub clock: ClockConfig,
     #[serde(default)]
     pub power_profile: PowerProfileConfig,
+    #[serde(default)]
+    pub system_information: SystemInformationConfig,
 }
