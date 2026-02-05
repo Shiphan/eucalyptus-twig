@@ -50,7 +50,9 @@ impl WidgetOption {
             Self::HyprlandWorkspace => cx.new(|cx| HyprlandWorkspace::new(cx, &())).into(),
             Self::Power => cx.new(|cx| Power::new(cx, &())).into(),
             Self::PowerMenu => cx.new(|cx| PowerMenu::new(cx, &())).into(),
-            Self::PowerProfile => cx.new(|cx| PowerProfile::new(cx, &())).into(),
+            Self::PowerProfile => cx
+                .new(|cx| PowerProfile::new(cx, &config.widget.power_profile))
+                .into(),
             Self::Quit => cx.new(|cx| Quit::new(cx, &())).into(),
             Self::Volume => cx.new(|cx| Volume::new(cx, &())).into(),
             Self::Workspaces => cx.new(|cx| Workspaces::new(cx, &())).into(),
