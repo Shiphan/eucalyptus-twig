@@ -1,13 +1,12 @@
-use std::{ops::Deref, time::Duration};
+use std::ops::Deref;
 
 use async_process::Command;
 use gpui::{
-    Animation, AnimationExt, App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay,
-    StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind, WindowOptions,
-    actions, black, div, ease_in_out,
+    App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay, StatefulInteractiveElement,
+    Window, WindowBackgroundAppearance, WindowKind, WindowOptions, actions, black, div,
     layer_shell::{KeyboardInteractivity, Layer, LayerShellOptions},
     prelude::*,
-    relative, rems, white,
+    rems, white,
 };
 
 use crate::widget::power_menu::PowerMenuConfig;
@@ -109,12 +108,7 @@ impl Render for PowerMenu {
                             cx.stop_propagation();
                         }))
                         .px(rems(0.6))
-                        .child(""), // .with_animation(
-                                     //     "power-menu-back-name-animation",
-                                     //     Animation::new(Duration::from_millis(1500))
-                                     //         .with_easing(ease_in_out),
-                                     //     |element, delta| element.w(relative(delta)),
-                                     // ),
+                        .child(""),
                 )
                 .child(
                     button()
@@ -170,13 +164,7 @@ impl Render for PowerMenu {
                             div()
                                 .text_size(rems(3.6))
                                 .font_family("Noto Sans")
-                                .child(selected_option.name())
-                                .with_animation(
-                                    "power-menu-real-name",
-                                    Animation::new(Duration::from_millis(1500))
-                                        .with_easing(ease_in_out),
-                                    |element, delta| element.w(relative(delta)),
-                                ),
+                                .child(selected_option.name()),
                         ),
                 )
         } else {
