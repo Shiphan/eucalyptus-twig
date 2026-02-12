@@ -1672,6 +1672,7 @@ dependencies = [
 name = "eucalyptus-twig"
 version = "0.1.0"
 dependencies = [
+ "async-process",
  "bluer",
  "futures",
  "gpui",

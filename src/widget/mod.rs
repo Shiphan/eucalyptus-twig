@@ -52,7 +52,9 @@ impl WidgetOption {
             Self::Display => cx.new(|cx| Display::new(cx, &())).into(),
             Self::HyprlandWorkspace => cx.new(|cx| HyprlandWorkspace::new(cx, &())).into(),
             Self::Power => cx.new(|cx| Power::new(cx, &())).into(),
-            Self::PowerMenu => cx.new(|cx| PowerMenu::new(cx, &())).into(),
+            Self::PowerMenu => cx
+                .new(|cx| PowerMenu::new(cx, &config.widget.power_menu))
+                .into(),
             Self::PowerProfile => cx
                 .new(|cx| PowerProfile::new(cx, &config.widget.power_profile))
                 .into(),

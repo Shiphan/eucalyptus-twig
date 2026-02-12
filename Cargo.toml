@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-process = "2.5.0"
 bluer = { version = "0.17.4", features = ["bluetoothd"] }
 futures = "0.3.31"
 gpui = { git = "https://github.com/zed-industries/zed.git", default-features = false, features = ["wayland"] }

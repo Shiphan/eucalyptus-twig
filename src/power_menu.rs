@@ -1,5 +1,6 @@
 use std::{ops::Deref, time::Duration};
 
+use async_process::Command;
 use gpui::{
     Animation, AnimationExt, App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay,
     StatefulInteractiveElement, Window, WindowBackgroundAppearance, WindowKind, WindowOptions,
@@ -9,15 +10,22 @@ use gpui::{
     relative, rems, white,
 };
 
+use crate::widget::power_menu::PowerMenuConfig;
+
 actions!([Escape]);
 
 pub struct PowerMenu {
+    config: PowerMenuConfig,
     selected: Option<PowerMenuOption>,
     focus_handle: FocusHandle,
 }
 
 impl PowerMenu {
-    pub fn build_root_view(window: &mut Window, cx: &mut App) -> Entity<Self> {
+    pub fn build_root_view(
+        window: &mut Window,
+        cx: &mut App,
+        config: PowerMenuConfig,
+    ) -> Entity<Self> {
         cx.new(|cx| {
             cx.bind_keys([
                 KeyBinding::new("escape", Escape, Some("power-menu")),
@@ -30,6 +38,7 @@ impl PowerMenu {
             focus_handle.focus(window, cx);
 
             Self {
+                config,
                 selected: None,
                 focus_handle,
             }
@@ -110,9 +119,49 @@ impl Render for PowerMenu {
                 .child(
                     button()
                         .id("power-menu-real")
-                        .on_click(|_, window, cx| {
-                            window.remove_window();
-                            cx.stop_propagation();
+                        .on_click({
+                            let command = match selected_option {
+                                PowerMenuOption::Lock => self.config.lock_command.clone(),
+                                PowerMenuOption::Suspend => self.config.suspend_command.clone(),
+                                PowerMenuOption::Hibernate => self.config.hibernate_command.clone(),
+                                PowerMenuOption::Reboot => self.config.reboot_command.clone(),
+                                PowerMenuOption::Shutdown => self.config.shutdown_command.clone(),
+                            };
+                            move |_, window, cx| {
+                                // run the command
+                                if let [program, args @ ..] = command.as_slice() {
+                                    match Command::new(program).args(args).spawn() {
+                                        Ok(mut child) => {
+                                            cx.spawn(async move |_| match child.status().await {
+                                                Ok(status) if status.success() => {
+                                                    tracing::info!("Child process successly exit");
+                                                }
+                                                Ok(status) => {
+                                                    tracing::warn!(
+                                                        "Child process exit with status: {status}"
+                                                    );
+                                                }
+                                                Err(e) => {
+                                                    tracing::error!(
+                                                        "Failed to get child process statue: {e}"
+                                                    );
+                                                }
+                                            })
+                                            .detach();
+                                        }
+                                        Err(e) => {
+                                            tracing::error!("Failed to spawn command: {e}");
+                                        }
+                                    }
+                                } else {
+                                    tracing::warn!(
+                                        "The command of this option is empty, not doing anything"
+                                    );
+                                }
+
+                                window.remove_window();
+                                cx.stop_propagation();
+                            }
                         })
                         .gap(rems(2.0))
                         .px(rems(2.0))
