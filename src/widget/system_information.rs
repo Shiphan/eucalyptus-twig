@@ -5,15 +5,25 @@ use std::{
     time::Duration,
 };
 
-use gpui::{Context, IntoElement, ParentElement, Render, Styled, Window, rems};
+use gpui::{
+    Context, IntoElement, ParentElement, PathBuilder, PathStyle, Render, StrokeOptions, Styled,
+    Window, canvas, div, opaque_grey, point, rems,
+};
+use heapless::HistoryBuf;
+use lyon::path::LineCap;
 use serde::Deserialize;
 
 use crate::widget::{Widget, widget_wrapper};
+
+const HISTORY_LEN: usize = 16;
 
 pub struct SystemInformation {
     temperature_hardware_name: String,
     cpu_statistics: Option<CpuStatistics>,
     hwmon_was_here: Option<u64>,
+    cpu_usage_history: HistoryBuf<f32, HISTORY_LEN>,
+    memory_usage_history: HistoryBuf<f32, HISTORY_LEN>,
+    temperature_history: HistoryBuf<f32, HISTORY_LEN>,
 }
 
 impl Widget for SystemInformation {
@@ -33,42 +43,96 @@ impl Widget for SystemInformation {
             temperature_hardware_name: config.temperature_hardware_name.clone(),
             cpu_statistics: None,
             hwmon_was_here: None,
+            cpu_usage_history: HistoryBuf::new(),
+            memory_usage_history: HistoryBuf::new(),
+            temperature_history: HistoryBuf::new(),
         }
     }
 }
 
 impl Render for SystemInformation {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        fn item<const N: usize>(
+            icon: impl IntoElement,
+            value: impl IntoElement,
+            history: HistoryBuf<f32, N>,
+        ) -> gpui::Div {
+            div()
+                .flex()
+                .child(div().font_family("Material Symbols Rounded").child(icon))
+                .child(
+                    div()
+                        .flex()
+                        .items_center()
+                        .justify_center()
+                        .w(rems(3.0))
+                        .relative()
+                        .child(
+                            canvas(
+                                |_, _, _| (),
+                                move |bounds, _, window, _| {
+                                    let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
+                                        StrokeOptions::default()
+                                            .with_line_cap(LineCap::Round)
+                                            .with_line_width(2.0),
+                                    ));
+                                    for (index, &record) in history.oldest_ordered().rev().enumerate() {
+                                        let point = point(bounds.size.width / (history.capacity() - 1) as f32 * index as f32, bounds.size.height * record) * -1.0;
+                                        if index == 0 {
+                                            path.move_to(point);
+                                        } else {
+                                            path.line_to(point);
+                                        }
+                                    }
+                                    path.translate(bounds.bottom_right());
+                                    match path.build() {
+                                        Ok(path) => window.paint_path(path, opaque_grey(0.5, 1.0)),
+                                        Err(e) => tracing::error!(error = %e, "Failed to build path for minute hand"),
+                                    }
+                                },
+                            ).absolute().size_full())
+                        .child(div().text_size(rems(0.8)).child(value)),
+                )
+        }
         widget_wrapper()
             .flex()
             .items_center()
             .gap(rems(0.25))
             .children(
                 [
-                    CpuStatistics::get()
-                        .map(|cpu_statistics| {
-                            self.cpu_statistics
-                                .replace(cpu_statistics.clone())
-                                .map(|old| {
-                                    format!(
-                                        "Cpu: {:.0}%",
-                                        (1.0 - cpu_statistics.idle_percentage(&old)) * 100.0
-                                    )
-                                })
-                        })
-                        .flatten(),
+                    CpuStatistics::get().and_then(|cpu_statistics| {
+                        self.cpu_statistics
+                            .replace(cpu_statistics.clone())
+                            .map(|old| {
+                                let cpu_usage = 1.0 - cpu_statistics.idle_percentage(&old);
+                                self.cpu_usage_history.write(cpu_usage as f32);
+                                item(
+                                    "\u{e322}",
+                                    format!("{:.0}%", (cpu_usage * 100.0).round()),
+                                    self.cpu_usage_history.clone(),
+                                )
+                            })
+                    }),
                     MemoryInfo::get().map(|memory_info| {
-                        format!(
-                            "Memory: {:.0}%",
-                            (1.0 - memory_info.available_percentage()) * 100.0
+                        let memory_usage = 1.0 - memory_info.available_percentage();
+                        self.memory_usage_history.write(memory_usage as f32);
+                        item(
+                            "\u{f7a3}",
+                            format!("{:.0}%", (memory_usage * 100.0).round()),
+                            self.memory_usage_history.clone(),
                         )
                     }),
+                    // Some(item("\u{e1db}", "100%".to_owned())),
+                    // Some(item("\u{f7a3}", "100%".to_owned())),
                     HardwareMonitoring::get(&self.temperature_hardware_name, self.hwmon_was_here)
                         .map(|info| {
                             self.hwmon_was_here = Some(info.id);
-                            format!(
-                                "Temperature: {:.1}°C",
-                                info.average_temperature() as f64 / 1000.0
+                            let temperature = info.average_temperature() as f64 / 1000.0;
+                            self.temperature_history.write(temperature as f32 / 100.0);
+                            item(
+                                "\u{f076}",
+                                format!("{:.0}°C", temperature.round()),
+                                self.temperature_history.clone(),
                             )
                         }),
                 ]
