@@ -50,9 +50,9 @@ impl Render for PowerProfile {
                     .font_family("Material Symbols Rounded")
             };
             match profile.as_str() {
-                "power-saver" => icon_wrapper().child("").into_any_element(),
-                "balanced" => icon_wrapper().child("").into_any_element(),
-                "performance" => icon_wrapper().child("").into_any_element(),
+                "power-saver" => icon_wrapper().child("\u{ec1a}").into_any_element(),
+                "balanced" => icon_wrapper().child("\u{e9e4}").into_any_element(),
+                "performance" => icon_wrapper().child("\u{eb9b}").into_any_element(),
                 _ => widget_wrapper().child(profile.clone()).into_any_element(),
             }
         } else {

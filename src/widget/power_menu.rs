@@ -37,7 +37,7 @@ impl Render for PowerMenu {
             })
             .text_color(rgb(0x7ebae4))
             .font_family("NotoSans Nerd Font Propo")
-            .child("")
+            .child("\u{f313}")
     }
 }
 

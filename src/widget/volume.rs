@@ -52,7 +52,7 @@ impl Render for Volume {
         } else if self.mute == Some(true) {
             widget_wrapper()
                 .font_family("Material Symbols Rounded")
-                .child("󰖁")
+                .child("\u{e04f}")
         } else if let Some(volume) = self.volume {
             let volume = volume.cbrt() * 100.0;
             widget_wrapper()
@@ -62,11 +62,11 @@ impl Render for Volume {
                     div()
                         .font_family("Material Symbols Rounded")
                         .child(if volume <= 0.0 {
-                            "󰕿"
+                            "\u{e04e}"
                         } else if volume < 50.0 {
-                            "󰖀"
+                            "\u{e04d}"
                         } else {
-                            "󰕾"
+                            "\u{e050}"
                         }),
                 )
                 .child(format!("{:.1}", volume))

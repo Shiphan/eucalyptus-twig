@@ -53,21 +53,21 @@ impl Render for Power {
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
                         if percentage >= 100.0 {
-                            ""
+                            "\u{e1a4}"
                         } else if percentage >= 80.0 {
-                            ""
+                            "\u{f0a7}"
                         } else if percentage >= 70.0 {
-                            ""
+                            "\u{f0a6}"
                         } else if percentage >= 50.0 {
-                            ""
+                            "\u{f0a5}"
                         } else if percentage >= 40.0 {
-                            ""
+                            "\u{f0a4}"
                         } else if percentage >= 20.0 {
-                            ""
+                            "\u{f0a3}"
                         } else if percentage >= 10.0 {
-                            ""
+                            "\u{f0a2}"
                         } else {
-                            ""
+                            "\u{e1a3}"
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
@@ -76,35 +76,35 @@ impl Render for Power {
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
                         if percentage >= 100.0 {
-                            ""
+                            "\u{e1a4}"
                         } else if percentage >= 80.0 {
-                            ""
+                            "\u{ebd2}"
                         } else if percentage >= 70.0 {
-                            ""
+                            "\u{ebd4}"
                         } else if percentage >= 50.0 {
-                            ""
+                            "\u{ebe2}"
                         } else if percentage >= 40.0 {
-                            ""
+                            "\u{ebdd}"
                         } else if percentage >= 20.0 {
-                            ""
+                            "\u{ebe0}"
                         } else if percentage >= 10.0 {
-                            ""
+                            "\u{ebd9}"
                         } else {
-                            ""
+                            "\u{ebdc}"
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
                 BatteryPowerState::Empty => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
-                    .child("")
+                    .child("\u{ebdc}")
                     .child(format!("{:.0}", percentage)),
                 BatteryPowerState::FullyCharged
                 | BatteryPowerState::PendingCharge
                 | BatteryPowerState::PendingDischarge => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
-                    .child("")
+                    .child("\u{f7eb}")
                     .child(format!("{:.0}", percentage)),
                 BatteryPowerState::Unknown => widget_wrapper().child("State: Unknown"),
             }

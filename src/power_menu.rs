@@ -108,7 +108,7 @@ impl Render for PowerMenu {
                             cx.stop_propagation();
                         }))
                         .px(rems(0.6))
-                        .child(""),
+                        .child("\u{e5cb}"),
                 )
                 .child(
                     button()
@@ -219,11 +219,11 @@ impl PowerMenuOption {
     }
     const fn icon(&self) -> &'static str {
         match self {
-            Self::Lock => "󰌿",
-            Self::Suspend => "󰏥",
-            Self::Hibernate => "󰤄",
-            Self::Reboot => "󰜉",
-            Self::Shutdown => "󰐥",
+            Self::Lock => "\u{e898}",
+            Self::Suspend => "\u{e1a2}",
+            Self::Hibernate => "\u{f34f}",
+            Self::Reboot => "\u{f053}",
+            Self::Shutdown => "\u{e8ac}",
         }
     }
 }

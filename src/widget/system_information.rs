@@ -131,7 +131,7 @@ impl Render for SystemInformation {
                             self.temperature_history.write(temperature as f32 / 100.0);
                             item(
                                 "\u{f076}",
-                                format!("{:.0}°C", temperature.round()),
+                                format!("{:.0}\u{b0}C", temperature.round()),
                                 self.temperature_history.clone(),
                             )
                         }),

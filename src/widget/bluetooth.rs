@@ -39,14 +39,14 @@ impl Render for Bluetooth {
             match self.powered {
                 Some(true) => {
                     if self.discovering == Some(true) {
-                        widget_wrapper().child("")
+                        widget_wrapper().child("\u{e1aa}")
                     } else if self.connected_devices.len() == 0 {
-                        widget_wrapper().child("")
+                        widget_wrapper().child("\u{e1a7}")
                     } else {
-                        widget_wrapper().child("")
+                        widget_wrapper().child("\u{e1a8}")
                     }
                 }
-                Some(false) => widget_wrapper().child(""),
+                Some(false) => widget_wrapper().child("\u{e1a9}"),
                 None => widget_wrapper().child("?"),
             }
         }
