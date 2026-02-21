@@ -4,9 +4,10 @@ use futures::{StreamExt, join};
 use gpui::{
     AsyncApp, Context, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rems,
 };
+use serde_repr::Deserialize_repr;
 use zbus::{
     Connection, proxy,
-    zvariant::{ObjectPath, OwnedObjectPath},
+    zvariant::{self, ObjectPath, OwnedObjectPath},
 };
 
 use crate::widget::{Widget, widget_wrapper};
@@ -15,7 +16,7 @@ use crate::widget::{Widget, widget_wrapper};
 pub struct Power {
     error_message: Option<String>,
     type_: Option<u32>,
-    state: Option<u32>,
+    state: Option<BatteryPowerState>,
     percentage: Option<f64>,
     time_to_empty: Option<Duration>,
     time_to_full: Option<Duration>,
@@ -43,12 +44,11 @@ impl Render for Power {
         if let Some(e) = &self.error_message {
             widget_wrapper().child(e.clone())
         } else if self.type_ == Some(2)
-            && let Some(state) = self.state
+            && let Some(state) = &self.state
             && let Some(percentage) = self.percentage
         {
             match state {
-                // Charging
-                1 => widget_wrapper()
+                BatteryPowerState::Charging => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
@@ -71,8 +71,7 @@ impl Render for Power {
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
-                // Discharging
-                2 => widget_wrapper()
+                BatteryPowerState::Discharging => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
@@ -95,19 +94,19 @@ impl Render for Power {
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
-                // Empty
-                3 => widget_wrapper()
+                BatteryPowerState::Empty => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
                     .child("")
                     .child(format!("{:.0}", percentage)),
-                // Fully charged
-                4 => widget_wrapper()
+                BatteryPowerState::FullyCharged
+                | BatteryPowerState::PendingCharge
+                | BatteryPowerState::PendingDischarge => widget_wrapper()
                     .flex()
                     .gap(rems(0.25))
                     .child("")
                     .child(format!("{:.0}", percentage)),
-                _ => widget_wrapper().child(format!("Other state: {state}")),
+                BatteryPowerState::Unknown => widget_wrapper().child("State: Unknown"),
             }
         } else {
             widget_wrapper().child("?")
@@ -164,7 +163,7 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
                     while let Some($field) = $stream.next().await {
                         match $field.get().await {
                             Ok($field) => {
-                                tracing::info!($field, concat!($name, " changed"));
+                                tracing::info!(?$field, concat!($name, " changed"));
                                 let _ = this.update(&mut cx, |this, cx| {
                                     this.$field = Some($field)$(.and_then($and_then))?;
                                     cx.notify()
@@ -209,6 +208,18 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
             }
         ),
     );
+}
+
+#[derive(Clone, Debug, Deserialize_repr, zvariant::OwnedValue)]
+#[repr(u32)]
+enum BatteryPowerState {
+    Unknown = 0,
+    Charging = 1,
+    Discharging = 2,
+    Empty = 3,
+    FullyCharged = 4,
+    PendingCharge = 5,
+    PendingDischarge = 6,
 }
 
 // <https://upower.freedesktop.org/docs/UPower.html>
@@ -301,7 +312,7 @@ trait UpowerDevice {
     #[zbus(property)]
     fn is_present(&self) -> zbus::Result<bool>;
     #[zbus(property)]
-    fn state(&self) -> zbus::Result<u32>;
+    fn state(&self) -> zbus::Result<BatteryPowerState>;
     #[zbus(property)]
     fn is_rechargeable(&self) -> zbus::Result<bool>;
     #[zbus(property)]
