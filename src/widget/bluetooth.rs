@@ -1,7 +1,8 @@
-use std::collections::HashSet;
+use std::{collections::HashSet, pin::pin};
 
 use bluer::{
     Adapter, AdapterEvent, AdapterProperty, Address, DeviceEvent, DeviceProperty, Session,
+    SessionEvent,
 };
 use futures::StreamExt;
 use gpui::{AsyncApp, Context, IntoElement, ParentElement, Render, WeakEntity, Window};
@@ -31,6 +32,15 @@ impl Widget for Bluetooth {
     }
 }
 
+impl Bluetooth {
+    fn clear(&mut self) {
+        self.error_message = None;
+        self.powered = None;
+        self.discovering = None;
+        self.connected_devices = HashSet::new();
+    }
+}
+
 impl Render for Bluetooth {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(e) = &self.error_message {
@@ -57,7 +67,15 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
     let handle = cx.update(|cx| Tokio::handle(cx));
     let _guard = handle.enter();
 
-    let adapter = match default_adapter().await {
+    let session = match Session::new().await {
+        Ok(x) => x,
+        Err(e) => {
+            tracing::error!(error = %e, "Failed to connect to system bluetooth daemon");
+            return;
+        }
+    };
+
+    let mut adapter = match session.default_adapter().await {
         Ok(x) => x,
         Err(e) => {
             tracing::error!(error = %e, "Failed to get default bluetooth adapter");
@@ -68,11 +86,53 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             return;
         }
     };
-    tracing::info!(default_adapter_name = adapter.name());
+    loop {
+        tracing::info!(default_adapter_name = adapter.name());
+        monitor_adapter(adapter, &this, cx).await;
+
+        let _ = this.update(cx, |this, cx| {
+            this.clear();
+            cx.notify();
+        });
+        tracing::warn!("event stream of default adapter ended");
+
+        match session.default_adapter().await {
+            Ok(new_default_adapter) => {
+                adapter = new_default_adapter;
+            }
+            Err(e) => {
+                tracing::warn!(error = %e, "Failed to get default adapter, waiting for adapter added event");
+                let mut events = pin!(session.events().await.unwrap());
+                loop {
+                    let event = events.next().await;
+                    match event {
+                        Some(SessionEvent::AdapterAdded(_)) => {
+                            break;
+                        }
+                        Some(SessionEvent::AdapterRemoved(_)) => (),
+                        None => {
+                            tracing::warn!("Event stream of bluetooth session ended");
+                            break;
+                        }
+                    }
+                }
+                adapter = match session.default_adapter().await {
+                    Ok(x) => x,
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to get default adapter");
+                        break;
+                    }
+                }
+            }
+        }
+    }
+}
+
+async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
     match adapter.is_powered().await {
         Ok(is_powered) => {
             tracing::info!(is_powered, "Adapter property");
-            let _ = this.update(cx, |this, cx| {
+            let _ = entity.update(cx, |this, cx| {
                 this.powered = Some(is_powered);
                 cx.notify();
             });
@@ -84,7 +144,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
     match adapter.is_discovering().await {
         Ok(discovering) => {
             tracing::info!(discovering, "Adapter property");
-            let _ = this.update(cx, |this, cx| {
+            let _ = entity.update(cx, |this, cx| {
                 this.discovering = Some(discovering);
                 cx.notify();
             });
@@ -96,7 +156,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
     match adapter.device_addresses().await {
         Ok(addresses) => {
             for address in addresses {
-                try_monitor_device(&adapter, address, this.clone(), cx).await;
+                try_monitor_device(&adapter, address, entity.clone(), cx).await;
             }
         }
         Err(e) => {
@@ -107,7 +167,7 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
         Ok(x) => x,
         Err(e) => {
             tracing::error!(error = %e, "Failed to get event stream of default adapter");
-            let _ = this.update(cx, |this, cx| {
+            let _ = entity.update(cx, |this, cx| {
                 this.error_message = Some(format!(
                     "Failed to get event stream of default adapter: {e}"
                 ));
@@ -120,10 +180,10 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
         tracing::debug!(?event, "Bluetooth event");
         match event {
             AdapterEvent::DeviceAdded(address) => {
-                try_monitor_device(&adapter, address, this.clone(), cx).await;
+                try_monitor_device(&adapter, address, entity.clone(), cx).await;
             }
             AdapterEvent::DeviceRemoved(address) => {
-                let _ = this.update(cx, |this, cx| {
+                let _ = entity.update(cx, |this, cx| {
                     let was_connected = this.connected_devices.remove(&address);
                     tracing::info!(%address, was_connected, "Removed a device");
                     cx.notify();
@@ -131,14 +191,14 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Powered(powered)) => {
                 tracing::info!(powered, "Adapter property changed");
-                let _ = this.update(cx, |this, cx| {
+                let _ = entity.update(cx, |this, cx| {
                     this.powered = Some(powered);
                     cx.notify();
                 });
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Discovering(discovering)) => {
                 tracing::info!(discovering, "Adapter property changed");
-                let _ = this.update(cx, |this, cx| {
+                let _ = entity.update(cx, |this, cx| {
                     this.discovering = Some(discovering);
                     cx.notify();
                 });
@@ -146,7 +206,6 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
             _ => (),
         }
     }
-    tracing::warn!("event stream of default adapter ended");
 }
 
 async fn try_monitor_device(
@@ -205,9 +264,4 @@ async fn try_monitor_device(
         }
     })
     .detach();
-}
-
-async fn default_adapter() -> bluer::Result<Adapter> {
-    let session = Session::new().await?;
-    session.default_adapter().await
 }
