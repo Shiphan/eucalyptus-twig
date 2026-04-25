@@ -12,6 +12,8 @@
     {
       devShells.${system}.default = pkgs.mkShell rec {
         buildInputs = with pkgs; [
+          clippy
+
           libxkbcommon.dev
           wayland
           vulkan-loader
