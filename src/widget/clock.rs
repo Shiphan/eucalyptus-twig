@@ -92,8 +92,7 @@ fn current_time(format_description: &OwnedFormatItem) -> Result<(Div, String), S
             move |bounds, _, window, _| {
                 let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
                     StrokeOptions::default()
-                        .with_start_cap(LineCap::Round)
-                        .with_end_cap(LineCap::Round)
+                        .with_line_cap(LineCap::Round)
                         .with_line_width(2.0),
                 ));
                 path.move_to(point(px(0.0), px(0.0)));
