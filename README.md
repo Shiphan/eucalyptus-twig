@@ -1,6 +1,6 @@
 # Eucalyptus Twig
 
-Taskbar for Wayland (mainly Hyprland)
+Taskbar for Wayland
 
 ---
 
@@ -8,9 +8,10 @@ TODO:
 - [ ] power menu
     - [x] functionality
     - [ ] animation
-- [x] battery/power
+- [ ] battery/power
     - upower (dbus): <https://upower.freedesktop.org/docs/>
     - [x] icon with real percentage
+    - [ ] more info: time to empty, energy rate
 - [x] clock
     - [x] analog clock icon
 - [ ] wayland/xwayland (hyprland)
@@ -18,7 +19,8 @@ TODO:
     - dbus: <https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/>
 - [x] workspaces (hyprland)
     - hyprland ipc: <https://wiki.hypr.land/IPC/>
-    - maybe use this: <https://wayland.app/protocols/ext-workspace-v1>
+- [x] workspaces (wayland)
+    - <https://wayland.app/protocols/ext-workspace-v1>
 - [ ] audio/volume
     - pipewire: <https://gitlab.freedesktop.org/pipewire/pipewire-rs>
     - pipewire-native: <https://gitlab.freedesktop.org/pipewire/pipewire-native-rs>
