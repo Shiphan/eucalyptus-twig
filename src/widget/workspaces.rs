@@ -46,31 +46,33 @@ impl Render for Workspaces {
             return widget_wrapper().child(e.trim().to_owned());
         }
 
-        widget_wrapper().flex().gap(rems(0.5)).children(
-            self.workspaces
-                .iter()
-                .enumerate()
-                .filter_map(|(index, (handle, workspace))| {
-                    if !IGNORE_HIDDEN && workspace.state.hidden {
-                        None
+        let mut workspaces = self
+            .workspaces
+            .iter()
+            .enumerate()
+            .filter_map(|(index, (handle, workspace))| {
+                if !IGNORE_HIDDEN && workspace.state.hidden {
+                    None
+                } else {
+                    let name = if workspace.state.active {
+                        format!(" > {} < ", workspace.name)
                     } else {
-                        let name = if workspace.state.active {
-                            format!(" > {} < ", workspace.name)
-                        } else {
-                            workspace.name.clone()
-                        };
+                        workspace.name.clone()
+                    };
 
-                        let div = if workspace.state.urgent {
-                            div().text_color(black()).bg(red()).rounded(rems(0.5))
-                        } else if workspace.state.active {
-                            div()
-                                .text_color(black())
-                                .bg(opaque_grey(1.0, 0.75))
-                                .rounded(rems(0.5))
-                        } else {
-                            div()
-                        };
-                        Some(if workspace.capabilities.activate {
+                    let div = if workspace.state.urgent {
+                        div().text_color(black()).bg(red()).rounded(rems(0.5))
+                    } else if workspace.state.active {
+                        div()
+                            .text_color(black())
+                            .bg(opaque_grey(1.0, 0.75))
+                            .rounded(rems(0.5))
+                    } else {
+                        div()
+                    };
+                    Some((
+                        &workspace.coordinates,
+                        if workspace.capabilities.activate {
                             div.id(format!("workspace-{index}"))
                                 .on_click({
                                     let handle = handle.clone();
@@ -82,10 +84,20 @@ impl Render for Workspaces {
                                 .into_any_element()
                         } else {
                             div.child(name).into_any_element()
-                        })
-                    }
-                }),
-        )
+                        },
+                    ))
+                }
+            })
+            .collect::<Vec<_>>();
+        workspaces.sort_by_key(|(x, _)| match x {
+            Some(x) => x.as_slice(),
+            None => &[],
+        });
+
+        widget_wrapper()
+            .flex()
+            .gap(rems(0.5))
+            .children(workspaces.into_iter().map(|(_, x)| x))
     }
 }
 
@@ -117,6 +129,15 @@ async fn task(this: WeakEntity<Workspaces>, cx: &mut AsyncApp) {
                         }
                         Event::Coordinates { coordinates } => {
                             tracing::info!(?coordinates);
+                            let (coordinates, remainder) = coordinates.as_chunks();
+                            if !remainder.is_empty() {
+                                tracing::warn!(
+                                    remainder,
+                                    "coordinates' length is not multiples of 4"
+                                );
+                            }
+                            let coordinates =
+                                coordinates.iter().map(|x| u32::from_ne_bytes(*x)).collect();
                             workspace.coordinates = Some(coordinates);
                         }
                         Event::State { state } => {
@@ -195,7 +216,7 @@ fn wayland_thread(tx: UnboundedSender<Update>) {
 struct Workspace {
     id: Option<String>,
     name: String,
-    coordinates: Option<Vec<u8>>,
+    coordinates: Option<Vec<u32>>,
     state: WorkspaceState,
     capabilities: WorkspaceCapabilities,
 }
@@ -251,7 +272,7 @@ impl From<ext_workspace_handle_v1::WorkspaceCapabilities> for WorkspaceCapabilit
 struct PendingWorkspace {
     id: Option<String>,
     name: Option<String>,
-    coordinates: Option<Vec<u8>>,
+    coordinates: Option<Vec<u32>>,
     state: Option<ext_workspace_handle_v1::State>,
     capabilities: Option<ext_workspace_handle_v1::WorkspaceCapabilities>,
 }
@@ -399,6 +420,11 @@ impl Dispatch<ExtWorkspaceHandleV1, ()> for State {
                 }
                 Event::Coordinates { coordinates } => {
                     tracing::info!(?coordinates);
+                    let (coordinates, remainder) = coordinates.as_chunks();
+                    if !remainder.is_empty() {
+                        tracing::warn!(remainder, "coordinates' length is not multiples of 4");
+                    }
+                    let coordinates = coordinates.iter().map(|x| u32::from_ne_bytes(*x)).collect();
                     pending_workspace.coordinates = Some(coordinates);
                 }
                 Event::State { state } => {
