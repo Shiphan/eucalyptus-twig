@@ -112,10 +112,16 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
     loop {
         let mut line = String::new();
         match event_stream.read_line(&mut line).await {
-            Ok(_) => (),
+            Ok(_) => {
+                let _ = this.update(cx, |this, cx| {
+                    this.error_message = None;
+                    cx.notify();
+                });
+            }
             Err(e) => {
                 let _ = this.update(cx, |this, cx| {
                     this.error_message = Some(format!("error while reading the socket: {e}"));
+                    tracing::error!("Error while reading the socket: {e}");
                     cx.notify();
                 });
                 break;
