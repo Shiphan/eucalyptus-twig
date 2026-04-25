@@ -6,23 +6,23 @@ Taskbar for Wayland (mainly Hyprland)
 
 TODO:
 - [ ] power menu
-    - [ ] functionality
+    - [x] functionality
     - [ ] animation
-- [ ] battery/power
+- [x] battery/power
     - upower (dbus): <https://upower.freedesktop.org/docs/>
-    - [ ] icon with real percentage
+    - [x] icon with real percentage
 - [x] clock
     - [x] analog clock icon
 - [ ] wayland/xwayland (hyprland)
 - [ ] systray
     - dbus: <https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/>
-- [ ] workspaces (hyprland)
+- [x] workspaces (hyprland)
     - hyprland ipc: <https://wiki.hypr.land/IPC/>
     - maybe use this: <https://wayland.app/protocols/ext-workspace-v1>
 - [ ] audio/volume
     - pipewire: <https://gitlab.freedesktop.org/pipewire/pipewire-rs>
     - pipewire-native: <https://gitlab.freedesktop.org/pipewire/pipewire-native-rs>
-    - [ ] show info
+    - [ ] show info: TODO: kinda works but not perfect
     - [ ] setting panel
 - [ ] internet/wifi
     - networkmanager (dbus): <https://networkmanager.dev/docs/api/latest/spec.html>
@@ -30,17 +30,17 @@ TODO:
     - [ ] setting panel
 - [ ] bluetooth
     - bluez: <https://github.com/bluez/bluer>
-    - [ ] show info
+    - [x] show info
     - [ ] setting panel
-- [ ] system info
-    - [ ] cpu
-    - [ ] ram
-    - [ ] temperature
+- [x] system info
+    - [x] cpu
+    - [x] ram
+    - [x] temperature
 - [ ] power profile (power-profile-daemon)
-    - [ ] show info
+    - [x] show info
     - dbus: <https://upower.pages.freedesktop.org/power-profiles-daemon/gdbus-org.freedesktop.UPower.PowerProfiles.html>
-    - [ ] setting panel
-    - [ ] maybe also support tlp (same dbus api as ppd)
+    - [x] setting panel
+    - [ ] maybe also support tlp (same dbus api as ppd): TODO: test tlp support
 - [ ] notification
     - dbus: <https://specifications.freedesktop.org/notification/latest/>
 
