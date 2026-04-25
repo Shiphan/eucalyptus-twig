@@ -94,6 +94,8 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
     let event_socket_path = format!("{runtime_dir}/{hyprland_instance_signature}/.socket2.sock");
     let command_socket_path = format!("{runtime_dir}/{hyprland_instance_signature}/.socket.sock");
 
+    try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+
     let mut event_stream = match UnixStream::connect(&event_socket_path).await {
         Ok(x) => BufReader::new(x),
         Err(e) => {
@@ -106,8 +108,6 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
             return;
         }
     };
-
-    try_update_with_get_workspace(&command_socket_path, &this, cx).await;
 
     loop {
         let mut line = String::new();
