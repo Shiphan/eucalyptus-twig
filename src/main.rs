@@ -38,8 +38,6 @@ fn main() {
     };
 
     Application::new().run(move |cx: &mut App| {
-        gpui_tokio::init(cx);
-
         cx.spawn(async move |cx| {
             // TODO: by default, gpui will not wait for wayland to tell us displays information
             // wait 10 poll for wayland to tell us all screens

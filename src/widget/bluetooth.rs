@@ -1,12 +1,12 @@
 use std::{collections::HashSet, pin::pin};
 
+use async_compat::Compat;
 use bluer::{
     Adapter, AdapterEvent, AdapterProperty, Address, DeviceEvent, DeviceProperty, Session,
     SessionEvent,
 };
 use futures::StreamExt;
 use gpui::{AsyncApp, Context, IntoElement, ParentElement, Render, WeakEntity, Window};
-use gpui_tokio::Tokio;
 
 use crate::widget::{Widget, widget_wrapper};
 
@@ -21,7 +21,7 @@ impl Widget for Bluetooth {
     type Config = ();
 
     fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        cx.spawn(task).detach();
+        cx.spawn(async |this, cx| Compat::new(task(this, cx)).await).detach();
 
         Self {
             error_message: None,
@@ -64,9 +64,6 @@ impl Render for Bluetooth {
 }
 
 async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
-    let handle = cx.update(|cx| Tokio::handle(cx));
-    let _guard = handle.enter();
-
     let session = match Session::new().await {
         Ok(x) => x,
         Err(e) => {
