@@ -13,8 +13,8 @@ use gpui::{
     AsyncApp, Context, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, black, div,
     opaque_grey, rems,
 };
-use gpui_net::async_net::UnixStream;
 use serde::Deserialize;
+use smol::net::unix::UnixStream;
 
 use crate::widget::{Widget, widget_wrapper};
 

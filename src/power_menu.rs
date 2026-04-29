@@ -1,6 +1,5 @@
 use std::ops::Deref;
 
-use async_process::Command;
 use gpui::{
     App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay, StatefulInteractiveElement,
     Window, WindowBackgroundAppearance, WindowKind, WindowOptions, actions, black, div,
@@ -8,6 +7,7 @@ use gpui::{
     prelude::*,
     rems, white,
 };
+use smol::process::Command;
 
 use crate::widget::power_menu::PowerMenuConfig;
 

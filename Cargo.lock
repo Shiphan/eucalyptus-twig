@@ -1583,18 +1583,17 @@ name = "eucalyptus-twig"
 version = "0.1.0"
 dependencies = [
  "async-compat",
- "async-process",
  "bluer",
  "futures",
  "gpui",
  "gpui_platform",
  "heapless",
  "lyon",
- "net",
  "pipewire",
  "serde",
  "serde_json",
  "serde_repr",
+ "smol",
  "time",
  "toml 1.1.2+spec-1.1.0",
  "tracing",
@@ -3420,17 +3419,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ee6cda3051665f1fb8d9e08fc35c96d5a244fb1be711a03b71118828afc9a873"
 dependencies = [
  "jni-sys 0.3.1",
-]
-
-[[package]]
-name = "net"
-version = "0.1.0"
-source = "git+https://github.com/zed-industries/zed.git#3014170d7e4dfbe8379beda4dec92d6256b41209"
-dependencies = [
- "anyhow",
- "async-io",
- "smol",
- "windows 0.61.3",
 ]
 
 [[package]]
