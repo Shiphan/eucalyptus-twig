@@ -1,7 +1,7 @@
 use std::{ops::Deref, pin::Pin, task::Poll, time::Duration};
 
 use gpui::{
-    AnyView, App, Application, Bounds, Context, Entity, Pixels, PlatformDisplay, Size, Window,
+    AnyView, App, Bounds, Context, Entity, Pixels, PlatformDisplay, Size, Window,
     WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div,
     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
     point,
@@ -37,7 +37,7 @@ fn main() {
         }
     };
 
-    Application::new().run(move |cx: &mut App| {
+    gpui_platform::application().run(move |cx: &mut App| {
         cx.spawn(async move |cx| {
             // TODO: by default, gpui will not wait for wayland to tell us displays information
             // wait 10 poll for wayland to tell us all screens

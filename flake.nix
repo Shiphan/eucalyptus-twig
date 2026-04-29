@@ -15,6 +15,7 @@
           clippy
 
           libxkbcommon.dev
+          fontconfig.dev
           wayland
           vulkan-loader
           pkg-config
