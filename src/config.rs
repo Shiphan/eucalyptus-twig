@@ -3,7 +3,6 @@ use std::{env, error::Error, fs, path::PathBuf};
 use serde::Deserialize;
 
 use crate::widget::{
-    WidgetOption,
     bluetooth::BluetoothConfig,
     clock::ClockConfig,
     network::NetworkConfig,
@@ -16,9 +15,9 @@ use crate::widget::{
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub left: Box<[WidgetOption]>,
-    pub middle: Box<[WidgetOption]>,
-    pub right: Box<[WidgetOption]>,
+    pub left: Box<[WidgetOptionGroup]>,
+    pub middle: Box<[WidgetOptionGroup]>,
+    pub right: Box<[WidgetOptionGroup]>,
     pub widget: WidgetConfig,
 }
 
@@ -26,16 +25,16 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             left: Box::new([
-                WidgetOption::PowerMenu,
-                WidgetOption::Power,
-                WidgetOption::Clock,
-                WidgetOption::Display,
+                WidgetOption::PowerMenu.into(),
+                WidgetOption::Power.into(),
+                WidgetOption::Clock.into(),
+                WidgetOption::Display.into(),
             ]),
-            middle: Box::new([WidgetOption::Workspaces]),
+            middle: Box::new([WidgetOption::Workspaces.into()]),
             right: Box::new([
-                WidgetOption::Volume,
-                WidgetOption::Bluetooth,
-                WidgetOption::PowerProfile,
+                WidgetOption::Volume.into(),
+                WidgetOption::Bluetooth.into(),
+                WidgetOption::PowerProfile.into(),
             ]),
             widget: WidgetConfig::default(),
         }
@@ -66,6 +65,44 @@ impl Config {
         };
         let config_content = fs::read(path)?;
         Ok(toml::from_slice(&config_content)?)
+    }
+}
+
+#[derive(Deserialize)]
+pub enum WidgetOption {
+    Bluetooth,
+    Clock,
+    Display,
+    HyprlandWorkspace,
+    Network,
+    Power,
+    PowerMenu,
+    PowerProfile,
+    Quit,
+    SystemInformation,
+    Volume,
+    Workspaces,
+}
+
+#[derive(Deserialize)]
+#[serde(untagged)]
+pub enum WidgetOptionGroup {
+    One(WidgetOption),
+    Array(Box<[WidgetOption]>),
+}
+
+impl From<WidgetOption> for WidgetOptionGroup {
+    fn from(value: WidgetOption) -> Self {
+        Self::One(value)
+    }
+}
+
+impl<T> From<T> for WidgetOptionGroup
+where
+    T: Into<Box<[WidgetOption]>>,
+{
+    fn from(value: T) -> Self {
+        Self::Array(value.into())
     }
 }
 

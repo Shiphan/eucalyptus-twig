@@ -7,11 +7,12 @@ use gpui::{
     StatefulInteractiveElement,
     Styled,
     Window,
+    div,
     rgb,
 };
 use serde::Deserialize;
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct PowerMenu {
     config: PowerMenuConfig,
@@ -30,7 +31,7 @@ impl Widget for PowerMenu {
 impl Render for PowerMenu {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let config = self.config.clone();
-        widget_wrapper()
+        div()
             .id("button_left")
             .on_click(move |_click_event, window, cx| {
                 let config = config.clone();

@@ -1,7 +1,6 @@
 use std::{ops::Deref, pin::Pin, task::Poll, time::Duration};
 
 use gpui::{
-    AnyView,
     App,
     Bounds,
     Context,
@@ -23,7 +22,7 @@ use gpui::{
 };
 use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::config::Config;
+use crate::{config::Config, widget::WidgetViewGroup};
 
 mod config;
 mod power_menu;
@@ -92,9 +91,9 @@ fn main() {
 }
 
 struct Bar {
-    left: Vec<AnyView>,
-    middle: Vec<AnyView>,
-    right: Vec<AnyView>,
+    left: Vec<WidgetViewGroup>,
+    middle: Vec<WidgetViewGroup>,
+    right: Vec<WidgetViewGroup>,
 }
 
 impl Bar {

@@ -6,9 +6,10 @@ use gpui::{
     Render,
     StatefulInteractiveElement,
     Window,
+    div,
 };
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct Quit;
 
@@ -22,7 +23,7 @@ impl Widget for Quit {
 
 impl Render for Quit {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        widget_wrapper()
+        div()
             .id("quit-button")
             .on_click(|_click_event, _window, cx| {
                 cx.quit();

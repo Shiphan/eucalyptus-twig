@@ -20,7 +20,7 @@ use zbus::{
     zvariant::{self, ObjectPath, OwnedObjectPath},
 };
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 #[derive(Clone)]
 pub struct Power {
@@ -52,13 +52,13 @@ impl Widget for Power {
 impl Render for Power {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(e) = &self.error_message {
-            widget_wrapper().child(e.clone())
+            div().child(e.clone())
         } else if self.type_ == Some(2)
             && let Some(state) = &self.state
             && let Some(percentage) = self.percentage
         {
             match state {
-                BatteryPowerState::Charging => widget_wrapper()
+                BatteryPowerState::Charging => div()
                     .flex()
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
@@ -81,7 +81,7 @@ impl Render for Power {
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Discharging => widget_wrapper()
+                BatteryPowerState::Discharging => div()
                     .flex()
                     .gap(rems(0.25))
                     .child(div().font_family("Material Symbols Rounded").child(
@@ -104,22 +104,22 @@ impl Render for Power {
                         },
                     ))
                     .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Empty => widget_wrapper()
+                BatteryPowerState::Empty => div()
                     .flex()
                     .gap(rems(0.25))
                     .child("\u{ebdc}")
                     .child(format!("{:.0}", percentage)),
                 BatteryPowerState::FullyCharged
                 | BatteryPowerState::PendingCharge
-                | BatteryPowerState::PendingDischarge => widget_wrapper()
+                | BatteryPowerState::PendingDischarge => div()
                     .flex()
                     .gap(rems(0.25))
                     .child("\u{f7eb}")
                     .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Unknown => widget_wrapper().child("State: Unknown"),
+                BatteryPowerState::Unknown => div().child("State: Unknown"),
             }
         } else {
-            widget_wrapper().child("?")
+            div().child("?")
             // let Self {
             //     error_message: _,
             //     type_,
@@ -128,7 +128,7 @@ impl Render for Power {
             //     time_to_empty,
             //     time_to_full,
             // } = self.clone();
-            // widget_wrapper().child(format!("type = {type_:?}, state = {state:?}, percentage = {percentage:?}, time_to_empty = {time_to_empty:?}, time_to_full = {time_to_full:?}"))
+            // div().child(format!("type = {type_:?}, state = {state:?}, percentage = {percentage:?}, time_to_empty = {time_to_empty:?}, time_to_full = {time_to_full:?}"))
         }
     }
 }

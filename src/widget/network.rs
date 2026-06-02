@@ -16,7 +16,7 @@ use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use zbus::zvariant;
 
-use crate::widget::{Widget, spawn_detached_command, widget_wrapper};
+use crate::widget::{Widget, spawn_detached_command};
 
 pub struct Network {
     config: NetworkConfig,
@@ -47,7 +47,7 @@ impl Render for Network {
         // 2. wifi strength: <https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.AccessPoint.html#gdbus-property-org-freedesktop-NetworkManager-AccessPoint.Strength>
         let _ = self.primary_connection_type;
 
-        let widget = widget_wrapper().child(div().font_family("Material Symbols Rounded").child(
+        let widget = div().child(div().font_family("Material Symbols Rounded").child(
             match self.state {
                 Some(NetworkManagerState::Disabled | NetworkManagerState::Disconnected) => {
                     "\u{e1da}"

@@ -1,6 +1,6 @@
-use gpui::{Context, IntoElement, ParentElement, Render, Window};
+use gpui::{Context, IntoElement, ParentElement, Render, Window, div};
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct Display;
 
@@ -18,6 +18,6 @@ impl Render for Display {
             Some(display) => format!("display = {:?}", display.id()),
             None => "display not found".to_owned(),
         };
-        widget_wrapper().child(display)
+        div().child(display)
     }
 }

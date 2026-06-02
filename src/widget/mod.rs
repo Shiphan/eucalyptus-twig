@@ -1,7 +1,20 @@
 use std::ffi::OsStr;
 
-use gpui::{AnyView, App, AppContext, Context, Div, Render, Styled, black, div, white};
-use serde::{Deserialize, de::DeserializeOwned};
+use gpui::{
+    AnyView,
+    App,
+    AppContext,
+    Context,
+    Div,
+    IntoElement,
+    ParentElement,
+    Render,
+    Styled,
+    black,
+    div,
+    white,
+};
+use serde::de::DeserializeOwned;
 use smol::process::Command;
 
 pub use bluetooth::Bluetooth;
@@ -17,7 +30,7 @@ pub use system_information::SystemInformation;
 pub use volume::Volume;
 pub use workspaces::Workspaces;
 
-use crate::config::Config;
+use crate::config::{Config, WidgetOption, WidgetOptionGroup};
 
 pub mod bluetooth;
 pub mod clock;
@@ -33,22 +46,6 @@ pub mod volume;
 pub mod workspaces;
 
 // TODO: unify widget naming, like Workspaces or Workspace
-
-#[derive(Deserialize)]
-pub enum WidgetOption {
-    Bluetooth,
-    Clock,
-    Display,
-    HyprlandWorkspace,
-    Network,
-    Power,
-    PowerMenu,
-    PowerProfile,
-    Quit,
-    SystemInformation,
-    Volume,
-    Workspaces,
-}
 
 impl WidgetOption {
     pub fn build(&self, cx: &mut impl AppContext, config: &Config) -> AnyView {
@@ -77,13 +74,43 @@ impl WidgetOption {
     }
 }
 
-pub fn widget_wrapper() -> Div {
-    div()
-        .text_color(white())
-        .bg(black())
-        .rounded_lg()
-        .px_2()
-        .py_0p5()
+impl WidgetOptionGroup {
+    pub fn build(&self, cx: &mut impl AppContext, config: &Config) -> WidgetViewGroup {
+        match self {
+            Self::One(widget_option) => WidgetViewGroup::One(widget_option.build(cx, config)),
+            Self::Array(widget_options) => {
+                WidgetViewGroup::Array(widget_options.iter().map(|x| x.build(cx, config)).collect())
+            }
+        }
+    }
+}
+
+#[derive(Clone)]
+pub enum WidgetViewGroup {
+    One(AnyView),
+    Array(Box<[AnyView]>),
+}
+
+impl IntoElement for WidgetViewGroup {
+    type Element = Div;
+
+    fn into_element(self) -> Self::Element {
+        let widget_wrapper = div()
+            .text_color(white())
+            .bg(black())
+            .rounded_lg()
+            .px_2()
+            .py_0p5();
+
+        match self {
+            Self::One(widget) => widget_wrapper.child(widget),
+            Self::Array(widgets) => widget_wrapper
+                .flex()
+                .flex_row()
+                .gap_x_0p5()
+                .children(widgets),
+        }
+    }
 }
 
 pub trait Widget: Render {

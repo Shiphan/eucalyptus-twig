@@ -22,10 +22,11 @@ use gpui::{
     StatefulInteractiveElement,
     WeakEntity,
     Window,
+    div,
 };
 use serde::Deserialize;
 
-use crate::widget::{Widget, spawn_detached_command, widget_wrapper};
+use crate::widget::{Widget, spawn_detached_command};
 
 pub struct Bluetooth {
     config: BluetoothConfig,
@@ -64,20 +65,20 @@ impl Bluetooth {
 impl Render for Bluetooth {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         let widget = if let Some(e) = &self.error_message {
-            widget_wrapper().child(e.clone())
+            div().child(e.clone())
         } else {
             match self.powered {
                 Some(true) => {
                     if self.discovering == Some(true) {
-                        widget_wrapper().child("\u{e1aa}")
+                        div().child("\u{e1aa}")
                     } else if self.connected_devices.len() == 0 {
-                        widget_wrapper().child("\u{e1a7}")
+                        div().child("\u{e1a7}")
                     } else {
-                        widget_wrapper().child("\u{e1a8}")
+                        div().child("\u{e1a8}")
                     }
                 }
-                Some(false) => widget_wrapper().child("\u{e1a9}"),
-                None => widget_wrapper().child("?"),
+                Some(false) => div().child("\u{e1a9}"),
+                None => div().child("?"),
             }
         };
 

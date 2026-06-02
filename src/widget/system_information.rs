@@ -25,7 +25,7 @@ use heapless::HistoryBuf;
 use lyon::path::LineCap;
 use serde::Deserialize;
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 const HISTORY_LEN: usize = 16;
 
@@ -106,51 +106,48 @@ impl Render for SystemInformation {
                         .child(div().text_size(rems(0.8)).child(value)),
                 )
         }
-        widget_wrapper()
-            .flex()
-            .items_center()
-            .gap(rems(0.25))
-            .children(
-                [
-                    CpuStatistics::get().and_then(|cpu_statistics| {
-                        self.cpu_statistics
-                            .replace(cpu_statistics.clone())
-                            .map(|old| {
-                                let cpu_usage = 1.0 - cpu_statistics.idle_percentage(&old);
-                                self.cpu_usage_history.write(cpu_usage as f32);
-                                item(
-                                    "\u{e322}",
-                                    format!("{:.0}%", (cpu_usage * 100.0).round()),
-                                    self.cpu_usage_history.clone(),
-                                )
-                            })
-                    }),
-                    MemoryInfo::get().map(|memory_info| {
-                        let memory_usage = 1.0 - memory_info.available_percentage();
-                        self.memory_usage_history.write(memory_usage as f32);
-                        item(
-                            "\u{f7a3}",
-                            format!("{:.0}%", (memory_usage * 100.0).round()),
-                            self.memory_usage_history.clone(),
-                        )
-                    }),
-                    // Some(item("\u{e1db}", "100%".to_owned())),
-                    // Some(item("\u{f7a3}", "100%".to_owned())),
-                    HardwareMonitoring::get(&self.temperature_hardware_name, self.hwmon_was_here)
-                        .map(|info| {
-                            self.hwmon_was_here = Some(info.id);
-                            let temperature = info.average_temperature() as f64 / 1000.0;
-                            self.temperature_history.write(temperature as f32 / 100.0);
+        div().flex().items_center().gap(rems(0.25)).children(
+            [
+                CpuStatistics::get().and_then(|cpu_statistics| {
+                    self.cpu_statistics
+                        .replace(cpu_statistics.clone())
+                        .map(|old| {
+                            let cpu_usage = 1.0 - cpu_statistics.idle_percentage(&old);
+                            self.cpu_usage_history.write(cpu_usage as f32);
                             item(
-                                "\u{f076}",
-                                format!("{:.0}\u{b0}C", temperature.round()),
-                                self.temperature_history.clone(),
+                                "\u{e322}",
+                                format!("{:.0}%", (cpu_usage * 100.0).round()),
+                                self.cpu_usage_history.clone(),
                             )
-                        }),
-                ]
-                .into_iter()
-                .filter_map(identity),
-            )
+                        })
+                }),
+                MemoryInfo::get().map(|memory_info| {
+                    let memory_usage = 1.0 - memory_info.available_percentage();
+                    self.memory_usage_history.write(memory_usage as f32);
+                    item(
+                        "\u{f7a3}",
+                        format!("{:.0}%", (memory_usage * 100.0).round()),
+                        self.memory_usage_history.clone(),
+                    )
+                }),
+                // Some(item("\u{e1db}", "100%".to_owned())),
+                // Some(item("\u{f7a3}", "100%".to_owned())),
+                HardwareMonitoring::get(&self.temperature_hardware_name, self.hwmon_was_here).map(
+                    |info| {
+                        self.hwmon_was_here = Some(info.id);
+                        let temperature = info.average_temperature() as f64 / 1000.0;
+                        self.temperature_history.write(temperature as f32 / 100.0);
+                        item(
+                            "\u{f076}",
+                            format!("{:.0}\u{b0}C", temperature.round()),
+                            self.temperature_history.clone(),
+                        )
+                    },
+                ),
+            ]
+            .into_iter()
+            .filter_map(identity),
+        )
     }
 }
 

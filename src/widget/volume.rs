@@ -39,7 +39,7 @@ use pipewire::{
 };
 use serde::Deserialize;
 
-use crate::widget::{Widget, spawn_detached_command, widget_wrapper};
+use crate::widget::{Widget, spawn_detached_command};
 
 pub struct Volume {
     error_message: Option<String>,
@@ -66,14 +66,14 @@ impl Widget for Volume {
 impl Render for Volume {
     fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
         let widget = if let Some(e) = &self.error_message {
-            widget_wrapper().child(e.clone())
+            div().child(e.clone())
         } else if self.mute == Some(true) {
-            widget_wrapper()
+            div()
                 .font_family("Material Symbols Rounded")
                 .child("\u{e04f}")
         } else if let Some(volume) = self.volume {
             let volume = volume.cbrt() * 100.0;
-            widget_wrapper()
+            div()
                 .flex()
                 .gap(rems(0.25))
                 .child(
@@ -89,7 +89,7 @@ impl Render for Volume {
                 )
                 .child(format!("{:.0}", volume))
         } else {
-            widget_wrapper().child("?")
+            div().child("?")
         };
 
         if let Some(command) = &self.config.settings_command {

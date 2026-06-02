@@ -33,7 +33,7 @@ use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 const IGNORE_HIDDEN: bool = true;
 
@@ -58,7 +58,7 @@ impl Widget for Workspaces {
 impl Render for Workspaces {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(e) = &self.error_message {
-            return widget_wrapper().child(e.trim().to_owned());
+            return div().child(e.trim().to_owned());
         }
 
         let mut workspaces = self
@@ -109,7 +109,7 @@ impl Render for Workspaces {
             None => &[],
         });
 
-        widget_wrapper()
+        div()
             .flex()
             .gap(rems(0.5))
             .children(workspaces.into_iter().map(|(_, x)| x))

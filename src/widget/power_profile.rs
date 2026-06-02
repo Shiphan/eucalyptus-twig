@@ -15,11 +15,12 @@ use gpui::{
     Styled,
     WeakEntity,
     Window,
+    div,
 };
 use serde::Deserialize;
 use zbus::{Connection, proxy, zvariant};
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct PowerProfile {
     tx: UnboundedSender<()>,
@@ -47,10 +48,10 @@ impl Widget for PowerProfile {
 impl Render for PowerProfile {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(e) = &self.error_message {
-            widget_wrapper().child(e.clone()).into_any_element()
+            div().child(e.clone()).into_any_element()
         } else if let Some(profile) = &self.active_profile {
             let icon_wrapper = || {
-                widget_wrapper()
+                div()
                     .id("power-profile")
                     .on_click(cx.listener(|this, _, _, _| {
                         let _ = this.tx.unbounded_send(());
@@ -61,10 +62,10 @@ impl Render for PowerProfile {
                 "power-saver" => icon_wrapper().child("\u{ec1a}").into_any_element(),
                 "balanced" => icon_wrapper().child("\u{e9e4}").into_any_element(),
                 "performance" => icon_wrapper().child("\u{eb9b}").into_any_element(),
-                _ => widget_wrapper().child(profile.clone()).into_any_element(),
+                _ => div().child(profile.clone()).into_any_element(),
             }
         } else {
-            widget_wrapper().child("?").into_any_element()
+            div().child("?").into_any_element()
         }
     }
 }

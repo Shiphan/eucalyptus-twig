@@ -28,7 +28,7 @@ use time::{
     format_description::{self, OwnedFormatItem},
 };
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct Clock {
     format_description: Result<OwnedFormatItem, InvalidFormatDescription>,
@@ -63,18 +63,17 @@ impl Render for Clock {
         let format_description = match &self.format_description {
             Ok(x) => x,
             Err(e) => {
-                return widget_wrapper()
-                    .child(format!("Error while parsing time format description: {e}"));
+                return div().child(format!("Error while parsing time format description: {e}"));
             }
         };
         match current_time(format_description) {
-            Ok((clock, formatted_time)) => widget_wrapper()
+            Ok((clock, formatted_time)) => div()
                 .flex()
                 .items_center()
                 .gap(rems(0.25))
                 .child(clock)
                 .child(formatted_time),
-            Err(e) => widget_wrapper().child(e),
+            Err(e) => div().child(e),
         }
     }
 }

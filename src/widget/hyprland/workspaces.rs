@@ -27,7 +27,7 @@ use gpui::{
 use serde::Deserialize;
 use smol::net::unix::UnixStream;
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::Widget;
 
 pub struct HyprlandWorkspace {
     error_message: Option<String>,
@@ -54,10 +54,10 @@ impl Widget for HyprlandWorkspace {
 impl Render for HyprlandWorkspace {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         if let Some(e) = &self.error_message {
-            return widget_wrapper().child(e.trim().to_owned());
+            return div().child(e.trim().to_owned());
         }
 
-        widget_wrapper()
+        div()
             .flex()
             .gap(rems(0.5))
             .children(self.workspaces.iter().map(|(&id, info)| {
