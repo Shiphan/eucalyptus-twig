@@ -17,11 +17,11 @@ use crate::widget::{
 #[serde(deny_unknown_fields)]
 pub struct Config {
     #[serde(default)]
-    pub left: Vec<WidgetOption>,
+    pub left: Box<[WidgetOption]>,
     #[serde(default)]
-    pub middle: Vec<WidgetOption>,
+    pub middle: Box<[WidgetOption]>,
     #[serde(default)]
-    pub right: Vec<WidgetOption>,
+    pub right: Box<[WidgetOption]>,
     #[serde(default)]
     pub widget: WidgetConfig,
 }
@@ -29,18 +29,18 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            left: vec![
+            left: Box::new([
                 WidgetOption::PowerMenu,
                 WidgetOption::Power,
                 WidgetOption::Clock,
                 WidgetOption::Display,
-            ],
-            middle: vec![WidgetOption::Workspaces],
-            right: vec![
+            ]),
+            middle: Box::new([WidgetOption::Workspaces]),
+            right: Box::new([
                 WidgetOption::Volume,
                 WidgetOption::Bluetooth,
                 WidgetOption::PowerProfile,
-            ],
+            ]),
             widget: WidgetConfig::default(),
         }
     }

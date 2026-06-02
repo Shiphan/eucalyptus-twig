@@ -82,7 +82,7 @@ impl Render for Bluetooth {
             }
         };
 
-        if let [program, args @ ..] = self.config.settings_command.as_slice() {
+        if let [program, args @ ..] = self.config.settings_command.as_ref() {
             let program = program.clone();
             let args = Box::<[_]>::from(args);
             widget
@@ -118,7 +118,7 @@ impl Render for Bluetooth {
 #[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct BluetoothConfig {
-    pub settings_command: Vec<String>,
+    pub settings_command: Box<[String]>,
 }
 
 async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {

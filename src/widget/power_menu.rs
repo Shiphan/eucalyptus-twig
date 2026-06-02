@@ -51,9 +51,9 @@ impl Render for PowerMenu {
 #[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct PowerMenuConfig {
-    pub lock_command: Vec<String>,
-    pub suspend_command: Vec<String>,
-    pub hibernate_command: Vec<String>,
-    pub reboot_command: Vec<String>,
-    pub shutdown_command: Vec<String>,
+    pub lock_command: Box<[String]>,
+    pub suspend_command: Box<[String]>,
+    pub hibernate_command: Box<[String]>,
+    pub reboot_command: Box<[String]>,
+    pub shutdown_command: Box<[String]>,
 }

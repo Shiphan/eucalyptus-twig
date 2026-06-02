@@ -93,7 +93,7 @@ impl Render for Volume {
             widget_wrapper().child("?")
         };
 
-        if let [program, args @ ..] = self.config.settings_command.as_slice() {
+        if let [program, args @ ..] = self.config.settings_command.as_ref() {
             let program = program.clone();
             let args = Box::<[_]>::from(args);
             widget
@@ -129,7 +129,7 @@ impl Render for Volume {
 #[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct VolumeConfig {
-    pub settings_command: Vec<String>,
+    pub settings_command: Box<[String]>,
 }
 
 async fn task(this: WeakEntity<Volume>, cx: &mut AsyncApp) {

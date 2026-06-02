@@ -63,7 +63,7 @@ impl Render for Network {
             },
         ));
 
-        if let [program, args @ ..] = self.config.settings_command.as_slice() {
+        if let [program, args @ ..] = self.config.settings_command.as_ref() {
             let program = program.clone();
             let args = Box::<[_]>::from(args);
             widget
@@ -99,7 +99,7 @@ impl Render for Network {
 #[derive(Clone, Default, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct NetworkConfig {
-    pub settings_command: Vec<String>,
+    pub settings_command: Box<[String]>,
 }
 
 async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
