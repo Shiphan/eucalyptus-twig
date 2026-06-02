@@ -1,11 +1,24 @@
 use std::ops::Deref;
 
 use gpui::{
-    App, Context, Entity, FocusHandle, KeyBinding, PlatformDisplay, StatefulInteractiveElement,
-    Window, WindowBackgroundAppearance, WindowKind, WindowOptions, actions, black, div,
+    App,
+    Context,
+    Entity,
+    FocusHandle,
+    KeyBinding,
+    PlatformDisplay,
+    StatefulInteractiveElement,
+    Window,
+    WindowBackgroundAppearance,
+    WindowKind,
+    WindowOptions,
+    actions,
+    black,
+    div,
     layer_shell::{KeyboardInteractivity, Layer, LayerShellOptions},
     prelude::*,
-    rems, white,
+    rems,
+    white,
 };
 use smol::process::Command;
 

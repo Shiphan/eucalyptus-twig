@@ -6,12 +6,23 @@ use std::{
 };
 
 use futures::{
-    AsyncReadExt, AsyncWriteExt,
+    AsyncReadExt,
+    AsyncWriteExt,
     io::{AsyncBufReadExt, BufReader},
 };
 use gpui::{
-    AsyncApp, Context, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, black, div,
-    opaque_grey, rems,
+    AsyncApp,
+    Context,
+    IntoElement,
+    ParentElement,
+    Render,
+    Styled,
+    WeakEntity,
+    Window,
+    black,
+    div,
+    opaque_grey,
+    rems,
 };
 use serde::Deserialize;
 use smol::net::unix::UnixStream;

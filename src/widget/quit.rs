@@ -1,5 +1,10 @@
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
     Window,
 };
 

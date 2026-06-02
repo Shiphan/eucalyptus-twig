@@ -5,8 +5,16 @@ use futures::{
     lock::Mutex,
 };
 use gpui::{
-    AsyncApp, Context, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, Styled, WeakEntity, Window,
+    AsyncApp,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    Styled,
+    WeakEntity,
+    Window,
 };
 use serde::Deserialize;
 use zbus::{Connection, proxy, zvariant};

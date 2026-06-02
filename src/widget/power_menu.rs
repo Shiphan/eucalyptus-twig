@@ -1,6 +1,13 @@
 use gpui::{
-    Context, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
-    Styled, Window, rgb,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    Styled,
+    Window,
+    rgb,
 };
 use serde::Deserialize;
 

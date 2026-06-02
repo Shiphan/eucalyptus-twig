@@ -3,9 +3,14 @@ use std::{env, error::Error, fs, path::PathBuf};
 use serde::Deserialize;
 
 use crate::widget::{
-    WidgetOption, bluetooth::BluetoothConfig, clock::ClockConfig, network::NetworkConfig,
-    power_menu::PowerMenuConfig, power_profile::PowerProfileConfig,
-    system_information::SystemInformationConfig, volume::VolumeConfig,
+    WidgetOption,
+    bluetooth::BluetoothConfig,
+    clock::ClockConfig,
+    network::NetworkConfig,
+    power_menu::PowerMenuConfig,
+    power_profile::PowerProfileConfig,
+    system_information::SystemInformationConfig,
+    volume::VolumeConfig,
 };
 
 #[derive(Deserialize)]

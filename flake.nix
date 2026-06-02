@@ -1,10 +1,18 @@
 {
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs/nixos-unstable";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
-    { self, nixpkgs }:
+    {
+      self,
+      nixpkgs,
+      fenix,
+    }:
     let
       system = "x86_64-linux";
       pkgs = nixpkgs.legacyPackages.${system};
@@ -12,6 +20,7 @@
     {
       devShells.${system}.default = pkgs.mkShell rec {
         buildInputs = with pkgs; [
+          fenix.packages.${system}.default.rustfmt
           clippy
 
           libxkbcommon.dev

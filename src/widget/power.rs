@@ -2,11 +2,21 @@ use std::time::Duration;
 
 use futures::{StreamExt, join};
 use gpui::{
-    AsyncApp, Context, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rems,
+    AsyncApp,
+    Context,
+    IntoElement,
+    ParentElement,
+    Render,
+    Styled,
+    WeakEntity,
+    Window,
+    div,
+    rems,
 };
 use serde_repr::Deserialize_repr;
 use zbus::{
-    Connection, proxy,
+    Connection,
+    proxy,
     zvariant::{self, ObjectPath, OwnedObjectPath},
 };
 

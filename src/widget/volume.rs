@@ -5,8 +5,17 @@ use futures::{
     channel::mpsc::{self, UnboundedSender},
 };
 use gpui::{
-    AsyncApp, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
-    Styled, WeakEntity, Window, div, rems,
+    AsyncApp,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    Styled,
+    WeakEntity,
+    Window,
+    div,
+    rems,
 };
 use pipewire::{
     context::ContextRc,
@@ -19,7 +28,10 @@ use pipewire::{
         param::ParamType,
         pod::{Pod, deserialize::PodDeserializer},
         sys::{
-            SPA_PARAM_ROUTE_device, SPA_PARAM_ROUTE_props, SPA_PROP_channelVolumes, SPA_PROP_mute,
+            SPA_PARAM_ROUTE_device,
+            SPA_PARAM_ROUTE_props,
+            SPA_PROP_channelVolumes,
+            SPA_PROP_mute,
         },
         utils::Id,
     },

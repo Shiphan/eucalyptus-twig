@@ -5,11 +5,26 @@ use futures::{
     channel::mpsc::{self, UnboundedSender},
 };
 use gpui::{
-    AsyncApp, Context, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, black, div, opaque_grey, red, rems,
+    AsyncApp,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    Styled,
+    WeakEntity,
+    Window,
+    black,
+    div,
+    opaque_grey,
+    red,
+    rems,
 };
 use wayland_client::{
-    Connection, Dispatch, QueueHandle,
+    Connection,
+    Dispatch,
+    QueueHandle,
     protocol::wl_registry::{self, WlRegistry},
 };
 use wayland_protocols::ext::workspace::v1::client::{

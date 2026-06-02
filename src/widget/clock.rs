@@ -1,13 +1,29 @@
 use std::time::Duration;
 
 use gpui::{
-    Context, Div, IntoElement, ParentElement, PathBuilder, PathStyle, Render, StrokeOptions,
-    Styled, Window, black, canvas, div, point, px, rems, white,
+    Context,
+    Div,
+    IntoElement,
+    ParentElement,
+    PathBuilder,
+    PathStyle,
+    Render,
+    StrokeOptions,
+    Styled,
+    Window,
+    black,
+    canvas,
+    div,
+    point,
+    px,
+    rems,
+    white,
 };
 use lyon::path::LineCap;
 use serde::Deserialize;
 use time::{
-    OffsetDateTime, Time,
+    OffsetDateTime,
+    Time,
     error::InvalidFormatDescription,
     format_description::{self, OwnedFormatItem},
 };

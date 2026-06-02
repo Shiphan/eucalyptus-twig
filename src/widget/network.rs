@@ -1,7 +1,16 @@
 use futures::StreamExt;
 use gpui::{
-    AsyncApp, Context, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, div,
+    AsyncApp,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    Styled,
+    WeakEntity,
+    Window,
+    div,
 };
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;

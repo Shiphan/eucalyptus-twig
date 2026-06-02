@@ -6,8 +6,20 @@ use std::{
 };
 
 use gpui::{
-    Context, IntoElement, ParentElement, PathBuilder, PathStyle, Render, StrokeOptions, Styled,
-    Window, canvas, div, opaque_grey, point, rems,
+    Context,
+    IntoElement,
+    ParentElement,
+    PathBuilder,
+    PathStyle,
+    Render,
+    StrokeOptions,
+    Styled,
+    Window,
+    canvas,
+    div,
+    opaque_grey,
+    point,
+    rems,
 };
 use heapless::HistoryBuf;
 use lyon::path::LineCap;

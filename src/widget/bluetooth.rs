@@ -2,13 +2,26 @@ use std::{collections::HashSet, pin::pin};
 
 use async_compat::Compat;
 use bluer::{
-    Adapter, AdapterEvent, AdapterProperty, Address, DeviceEvent, DeviceProperty, Session,
+    Adapter,
+    AdapterEvent,
+    AdapterProperty,
+    Address,
+    DeviceEvent,
+    DeviceProperty,
+    Session,
     SessionEvent,
 };
 use futures::StreamExt;
 use gpui::{
-    AsyncApp, Context, InteractiveElement, IntoElement, ParentElement, Render,
-    StatefulInteractiveElement, WeakEntity, Window,
+    AsyncApp,
+    Context,
+    InteractiveElement,
+    IntoElement,
+    ParentElement,
+    Render,
+    StatefulInteractiveElement,
+    WeakEntity,
+    Window,
 };
 use serde::Deserialize;
 use smol::process::Command;

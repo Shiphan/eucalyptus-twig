@@ -1,12 +1,25 @@
 use std::{ops::Deref, pin::Pin, task::Poll, time::Duration};
 
 use gpui::{
-    AnyView, App, Bounds, Context, Entity, Pixels, PlatformDisplay, Size, Window,
-    WindowBackgroundAppearance, WindowBounds, WindowKind, WindowOptions, div,
+    AnyView,
+    App,
+    Bounds,
+    Context,
+    Entity,
+    Pixels,
+    PlatformDisplay,
+    Size,
+    Window,
+    WindowBackgroundAppearance,
+    WindowBounds,
+    WindowKind,
+    WindowOptions,
+    div,
     layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
     point,
     prelude::*,
-    px, rems,
+    px,
+    rems,
 };
 use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
