@@ -24,5 +24,10 @@ wayland-client = "0.31.12"
 wayland-protocols = { version = "0.32.10", features = ["client", "staging"] }
 zbus = { version = "5.12.0", default-features = false, features = ["async-io"] }
 
+[features]
+default = []
+tracing-info = []
+tracing-trace = []
+
 [lints.clippy]
 semicolon_if_nothing_returned = "warn"

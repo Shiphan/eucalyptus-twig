@@ -38,7 +38,16 @@ fn main() {
         .with(
             tracing_subscriber::filter::Targets::new()
                 .with_default(tracing::Level::WARN)
-                .with_target(env!("CARGO_CRATE_NAME"), tracing::Level::INFO),
+                .with_target(
+                    env!("CARGO_CRATE_NAME"),
+                    if cfg!(feature = "tracing-trace") {
+                        tracing::Level::TRACE
+                    } else if cfg!(feature = "tracing-info") {
+                        tracing::Level::INFO
+                    } else {
+                        tracing::Level::WARN
+                    },
+                ),
         )
         .init();
 
