@@ -155,7 +155,7 @@ impl Render for SystemInformation {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct SystemInformationConfig {
     #[serde(default = "default_update")]
     update: f64,

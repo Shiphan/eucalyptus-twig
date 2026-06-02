@@ -70,7 +70,7 @@ impl Render for PowerProfile {
 }
 
 #[derive(Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct PowerProfileConfig {
     cycle_direction: CycleDirection,
 }

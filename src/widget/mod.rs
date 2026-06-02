@@ -1,5 +1,8 @@
-use gpui::{AnyView, AppContext, Context, Div, Render, Styled, black, div, white};
+use std::ffi::OsStr;
+
+use gpui::{AnyView, App, AppContext, Context, Div, Render, Styled, black, div, white};
 use serde::{Deserialize, de::DeserializeOwned};
+use smol::process::Command;
 
 pub use bluetooth::Bluetooth;
 pub use clock::Clock;
@@ -87,4 +90,34 @@ pub trait Widget: Render {
     type Config: Default + DeserializeOwned;
 
     fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self;
+}
+
+fn spawn_detached_command<S>(cx: &mut App, command: &[S], option_name: &'static str)
+where
+    S: AsRef<OsStr>,
+{
+    let [program, args @ ..] = command else {
+        tracing::warn!("{} is an empty array, no command is executed.", option_name);
+        return;
+    };
+
+    match Command::new(program).args(args).spawn() {
+        Ok(mut child) => {
+            cx.spawn(async move |_| match child.status().await {
+                Ok(status) if status.success() => {
+                    tracing::info!("Child process successly exit");
+                }
+                Ok(status) => {
+                    tracing::warn!("Child process exit with status: {status}");
+                }
+                Err(e) => {
+                    tracing::error!("Failed to get child process statue: {e}");
+                }
+            })
+            .detach();
+        }
+        Err(e) => {
+            tracing::error!("Failed to spawn command: {e}");
+        }
+    }
 }

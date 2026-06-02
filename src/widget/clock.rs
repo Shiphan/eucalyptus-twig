@@ -80,7 +80,7 @@ impl Render for Clock {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct ClockConfig {
     #[serde(default = "default_format_string")]
     format: String,

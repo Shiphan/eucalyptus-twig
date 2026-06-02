@@ -14,15 +14,11 @@ use crate::widget::{
 };
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct Config {
-    #[serde(default)]
     pub left: Box<[WidgetOption]>,
-    #[serde(default)]
     pub middle: Box<[WidgetOption]>,
-    #[serde(default)]
     pub right: Box<[WidgetOption]>,
-    #[serde(default)]
     pub widget: WidgetConfig,
 }
 
@@ -74,20 +70,13 @@ impl Config {
 }
 
 #[derive(Deserialize, Default)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct WidgetConfig {
-    #[serde(default)]
     pub bluetooth: BluetoothConfig,
-    #[serde(default)]
     pub clock: ClockConfig,
-    #[serde(default)]
     pub network: NetworkConfig,
-    #[serde(default)]
     pub power_menu: PowerMenuConfig,
-    #[serde(default)]
     pub power_profile: PowerProfileConfig,
-    #[serde(default)]
     pub system_information: SystemInformationConfig,
-    #[serde(default)]
     pub volume: VolumeConfig,
 }

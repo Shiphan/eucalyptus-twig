@@ -49,7 +49,7 @@ impl Render for PowerMenu {
 }
 
 #[derive(Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct PowerMenuConfig {
     pub lock_command: Box<[String]>,
     pub suspend_command: Box<[String]>,

@@ -24,9 +24,8 @@ use gpui::{
     Window,
 };
 use serde::Deserialize;
-use smol::process::Command;
 
-use crate::widget::{Widget, widget_wrapper};
+use crate::widget::{Widget, spawn_detached_command, widget_wrapper};
 
 pub struct Bluetooth {
     config: BluetoothConfig,
@@ -82,32 +81,17 @@ impl Render for Bluetooth {
             }
         };
 
-        if let [program, args @ ..] = self.config.settings_command.as_ref() {
-            let program = program.clone();
-            let args = Box::<[_]>::from(args);
+        if let Some(command) = &self.config.settings_command {
+            let command = command.clone();
             widget
                 .id("network")
-                .on_click(
-                    move |_, _, cx| match Command::new(&program).args(&args).spawn() {
-                        Ok(mut child) => {
-                            cx.spawn(async move |_| match child.status().await {
-                                Ok(status) if status.success() => {
-                                    tracing::info!("Child process successly exit");
-                                }
-                                Ok(status) => {
-                                    tracing::warn!("Child process exit with status: {status}");
-                                }
-                                Err(e) => {
-                                    tracing::error!("Failed to get child process statue: {e}");
-                                }
-                            })
-                            .detach();
-                        }
-                        Err(e) => {
-                            tracing::error!("Failed to spawn command: {e}");
-                        }
-                    },
-                )
+                .on_click(move |_, _, cx| {
+                    spawn_detached_command(
+                        cx,
+                        command.as_ref(),
+                        "widget.bluetooth.settings_command",
+                    )
+                })
                 .into_any_element()
         } else {
             widget.into_any_element()
@@ -116,9 +100,9 @@ impl Render for Bluetooth {
 }
 
 #[derive(Clone, Default, Deserialize)]
-#[serde(deny_unknown_fields)]
+#[serde(default, deny_unknown_fields)]
 pub struct BluetoothConfig {
-    pub settings_command: Box<[String]>,
+    pub settings_command: Option<Box<[String]>>,
 }
 
 async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
