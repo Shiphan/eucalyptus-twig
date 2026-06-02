@@ -9,7 +9,7 @@ use gpui::{
     StatefulInteractiveElement, Styled, WeakEntity, Window,
 };
 use serde::Deserialize;
-use zbus::{Connection, proxy};
+use zbus::{Connection, proxy, zvariant};
 
 use crate::widget::{Widget, widget_wrapper};
 
@@ -102,11 +102,13 @@ async fn task(
             return;
         }
     };
-    let mut stream = proxy.receive_active_profile_changed().await;
-    let active_profile = Mutex::new(None::<String>);
+    let mut active_profile_stream = proxy.receive_active_profile_changed().await;
+    let active_profile = Mutex::new(None);
+    let mut profiles_stream = proxy.receive_profiles_changed().await;
+    let profiles = Mutex::new(None);
     join!(
         async {
-            while let Some(new_active_profile) = stream.next().await {
+            while let Some(new_active_profile) = active_profile_stream.next().await {
                 match new_active_profile.get().await {
                     Ok(new_active_profile) => {
                         tracing::info!(new_active_profile, "Power profile changed");
@@ -124,26 +126,54 @@ async fn task(
             tracing::warn!("Receive ActiveProfile stream ended");
         },
         async {
+            while let Some(new_profiles) = profiles_stream.next().await {
+                match new_profiles.get().await {
+                    Ok(new_profiles) => {
+                        tracing::info!(?new_profiles, "Power profile changed");
+                        let new_profiles = new_profiles
+                            .into_iter()
+                            .map(|Profile { profile }| profile)
+                            .collect();
+                        profiles.lock().await.replace(new_profiles);
+                    }
+                    Err(e) => {
+                        tracing::error!(error = %e, "Failed to get new ActiveProfile");
+                    }
+                }
+            }
+            tracing::warn!("Receive ActiveProfile stream ended");
+        },
+        async {
             while let Some(()) = rx.next().await {
-                let target_profile =
-                    if let Some(active_profile) = active_profile.lock().await.as_ref() {
-                        ["power-saver", "balanced", "performance"][(match active_profile.as_str() {
-                            "power-saver" => 0,
-                            "balanced" => 1,
-                            "performance" => 2,
-                            _ => 1,
-                        } + match cycle_direction {
-                            CycleDirection::Up => 1,
-                            CycleDirection::Down => 2,
-                        }) % 3]
-                    } else {
-                        "balanced"
-                    };
+                let active_profile = active_profile.lock().await;
+                let profiles = profiles.lock().await;
+                let target_profile = match (
+                    active_profile.as_ref(),
+                    profiles.as_ref().map(Vec::as_slice),
+                ) {
+                    (Some(active_profile), Some(profiles)) => match (
+                        profiles.iter().position(|x| x == active_profile),
+                        &cycle_direction,
+                    ) {
+                        (Some(position), CycleDirection::Up) if position == profiles.len() => {
+                            profiles.first()
+                        }
+                        (Some(position), CycleDirection::Up) => profiles.get(position + 1),
+                        (Some(position), CycleDirection::Down) if position == 0 => profiles.last(),
+                        (Some(position), CycleDirection::Down) => profiles.get(position - 1),
+                        (None, _) => profiles.first(),
+                    }
+                    .map(String::as_str),
+                    (Some(active_profile), None) => Some(active_profile.as_str()),
+                    (None, Some([profile, ..])) => Some(profile.as_str()),
+                    (None, Some([])) | (None, None) => None,
+                };
+                let target_profile = target_profile.unwrap_or("balanced"); // Default to balanced
                 if let Err(e) = proxy.set_active_profile(target_profile).await {
                     tracing::error!(error = %e, "Failed to set active profile");
                 }
             }
-        }
+        },
     );
 }
 
@@ -154,14 +184,9 @@ async fn task(
     default_path = "/org/freedesktop/UPower/PowerProfiles"
 )]
 trait PowerProfiles {
-    fn hold_profile(
-        &self,
-        profile: String,
-        reason: String,
-        application_id: String,
-    ) -> zbus::Result<u32>;
+    fn hold_profile(&self, profile: &str, reason: &str, application_id: &str) -> zbus::Result<u32>;
     fn release_profile(&self, cookie: u32) -> zbus::Result<()>;
-    fn set_action_enabled(&self, action: String, enabled: bool) -> zbus::Result<()>;
+    fn set_action_enabled(&self, action: &str, enabled: bool) -> zbus::Result<()>;
 
     #[zbus(signal)]
     fn profile_released(&self, cookie: u32) -> zbus::Result<()>;
@@ -172,4 +197,13 @@ trait PowerProfiles {
     fn set_active_profile(&self, active_profile: &str) -> zbus::Result<()>;
     #[zbus(property)]
     fn performance_degraded(&self) -> zbus::Result<String>;
+    #[zbus(property)]
+    fn profiles(&self) -> zbus::Result<Vec<Profile>>;
+}
+
+#[derive(Debug, zvariant::Value)]
+#[zvariant(signature = "a{sv}")]
+struct Profile {
+    #[zvariant(rename = "Profile")]
+    profile: String,
 }
