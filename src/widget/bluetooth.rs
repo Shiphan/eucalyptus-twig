@@ -6,11 +6,17 @@ use bluer::{
     SessionEvent,
 };
 use futures::StreamExt;
-use gpui::{AsyncApp, Context, IntoElement, ParentElement, Render, WeakEntity, Window};
+use gpui::{
+    AsyncApp, Context, InteractiveElement, IntoElement, ParentElement, Render,
+    StatefulInteractiveElement, WeakEntity, Window,
+};
+use serde::Deserialize;
+use smol::process::Command;
 
 use crate::widget::{Widget, widget_wrapper};
 
 pub struct Bluetooth {
+    config: BluetoothConfig,
     error_message: Option<String>,
     powered: Option<bool>,
     discovering: Option<bool>,
@@ -18,12 +24,14 @@ pub struct Bluetooth {
 }
 
 impl Widget for Bluetooth {
-    type Config = ();
+    type Config = BluetoothConfig;
 
-    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        cx.spawn(async |this, cx| Compat::new(task(this, cx)).await).detach();
+    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
+        cx.spawn(async |this, cx| Compat::new(task(this, cx)).await)
+            .detach();
 
         Self {
+            config: config.clone(),
             error_message: None,
             powered: None,
             discovering: None,
@@ -43,7 +51,7 @@ impl Bluetooth {
 
 impl Render for Bluetooth {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(e) = &self.error_message {
+        let widget = if let Some(e) = &self.error_message {
             widget_wrapper().child(e.clone())
         } else {
             match self.powered {
@@ -59,8 +67,45 @@ impl Render for Bluetooth {
                 Some(false) => widget_wrapper().child("\u{e1a9}"),
                 None => widget_wrapper().child("?"),
             }
+        };
+
+        if let [program, args @ ..] = self.config.settings_command.as_slice() {
+            let program = program.clone();
+            let args = Box::<[_]>::from(args);
+            widget
+                .id("network")
+                .on_click(
+                    move |_, _, cx| match Command::new(&program).args(&args).spawn() {
+                        Ok(mut child) => {
+                            cx.spawn(async move |_| match child.status().await {
+                                Ok(status) if status.success() => {
+                                    tracing::info!("Child process successly exit");
+                                }
+                                Ok(status) => {
+                                    tracing::warn!("Child process exit with status: {status}");
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to get child process statue: {e}");
+                                }
+                            })
+                            .detach();
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to spawn command: {e}");
+                        }
+                    },
+                )
+                .into_any_element()
+        } else {
+            widget.into_any_element()
         }
     }
+}
+
+#[derive(Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct BluetoothConfig {
+    pub settings_command: Vec<String>,
 }
 
 async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {

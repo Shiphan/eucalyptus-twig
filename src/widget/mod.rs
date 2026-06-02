@@ -5,6 +5,7 @@ pub use bluetooth::Bluetooth;
 pub use clock::Clock;
 pub use display::Display;
 pub use hyprland::workspaces::HyprlandWorkspace;
+pub use network::Network;
 pub use power::Power;
 pub use power_menu::PowerMenu;
 pub use power_profile::PowerProfile;
@@ -19,6 +20,7 @@ pub mod bluetooth;
 pub mod clock;
 pub mod display;
 pub mod hyprland;
+pub mod network;
 pub mod power;
 pub mod power_menu;
 pub mod power_profile;
@@ -35,6 +37,7 @@ pub enum WidgetOption {
     Clock,
     Display,
     HyprlandWorkspace,
+    Network,
     Power,
     PowerMenu,
     PowerProfile,
@@ -47,10 +50,13 @@ pub enum WidgetOption {
 impl WidgetOption {
     pub fn build(&self, cx: &mut impl AppContext, config: &Config) -> AnyView {
         match self {
-            Self::Bluetooth => cx.new(|cx| Bluetooth::new(cx, &())).into(),
+            Self::Bluetooth => cx
+                .new(|cx| Bluetooth::new(cx, &config.widget.bluetooth))
+                .into(),
             Self::Clock => cx.new(|cx| Clock::new(cx, &config.widget.clock)).into(),
             Self::Display => cx.new(|cx| Display::new(cx, &())).into(),
             Self::HyprlandWorkspace => cx.new(|cx| HyprlandWorkspace::new(cx, &())).into(),
+            Self::Network => cx.new(|cx| Network::new(cx, &config.widget.network)).into(),
             Self::Power => cx.new(|cx| Power::new(cx, &())).into(),
             Self::PowerMenu => cx
                 .new(|cx| PowerMenu::new(cx, &config.widget.power_menu))
@@ -62,7 +68,7 @@ impl WidgetOption {
             Self::SystemInformation => cx
                 .new(|cx| SystemInformation::new(cx, &config.widget.system_information))
                 .into(),
-            Self::Volume => cx.new(|cx| Volume::new(cx, &())).into(),
+            Self::Volume => cx.new(|cx| Volume::new(cx, &config.widget.volume)).into(),
             Self::Workspaces => cx.new(|cx| Workspaces::new(cx, &())).into(),
         }
     }

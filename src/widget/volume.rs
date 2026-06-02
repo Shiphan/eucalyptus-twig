@@ -4,7 +4,10 @@ use futures::{
     StreamExt,
     channel::mpsc::{self, UnboundedSender},
 };
-use gpui::{AsyncApp, IntoElement, ParentElement, Render, Styled, WeakEntity, Window, div, rems};
+use gpui::{
+    AsyncApp, InteractiveElement, IntoElement, ParentElement, Render, StatefulInteractiveElement,
+    Styled, WeakEntity, Window, div, rems,
+};
 use pipewire::{
     context::ContextRc,
     device::{Device, DeviceChangeMask, DeviceInfoRef, DeviceListener},
@@ -23,6 +26,7 @@ use pipewire::{
     types::ObjectType,
 };
 use serde::Deserialize;
+use smol::process::Command;
 
 use crate::widget::{Widget, widget_wrapper};
 
@@ -30,25 +34,27 @@ pub struct Volume {
     error_message: Option<String>,
     volume: Option<f32>,
     mute: Option<bool>,
+    config: VolumeConfig,
 }
 
 impl Widget for Volume {
-    type Config = ();
+    type Config = VolumeConfig;
 
-    fn new(cx: &mut gpui::Context<Self>, _config: &Self::Config) -> Self {
+    fn new(cx: &mut gpui::Context<Self>, config: &Self::Config) -> Self {
         cx.spawn(task).detach();
 
         Self {
             error_message: None,
             volume: None,
             mute: None,
+            config: config.clone(),
         }
     }
 }
 
 impl Render for Volume {
     fn render(&mut self, _window: &mut Window, _cx: &mut gpui::Context<Self>) -> impl IntoElement {
-        if let Some(e) = &self.error_message {
+        let widget = if let Some(e) = &self.error_message {
             widget_wrapper().child(e.clone())
         } else if self.mute == Some(true) {
             widget_wrapper()
@@ -73,8 +79,45 @@ impl Render for Volume {
                 .child(format!("{:.0}", volume))
         } else {
             widget_wrapper().child("?")
+        };
+
+        if let [program, args @ ..] = self.config.settings_command.as_slice() {
+            let program = program.clone();
+            let args = Box::<[_]>::from(args);
+            widget
+                .id("volume")
+                .on_click(
+                    move |_, _, cx| match Command::new(&program).args(&args).spawn() {
+                        Ok(mut child) => {
+                            cx.spawn(async move |_| match child.status().await {
+                                Ok(status) if status.success() => {
+                                    tracing::info!("Child process successly exit");
+                                }
+                                Ok(status) => {
+                                    tracing::warn!("Child process exit with status: {status}");
+                                }
+                                Err(e) => {
+                                    tracing::error!("Failed to get child process statue: {e}");
+                                }
+                            })
+                            .detach();
+                        }
+                        Err(e) => {
+                            tracing::error!("Failed to spawn command: {e}");
+                        }
+                    },
+                )
+                .into_any_element()
+        } else {
+            widget.into_any_element()
         }
     }
+}
+
+#[derive(Clone, Default, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct VolumeConfig {
+    pub settings_command: Vec<String>,
 }
 
 async fn task(this: WeakEntity<Volume>, cx: &mut AsyncApp) {

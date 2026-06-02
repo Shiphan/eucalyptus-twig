@@ -3,8 +3,9 @@ use std::{env, error::Error, fs, path::PathBuf};
 use serde::Deserialize;
 
 use crate::widget::{
-    WidgetOption, clock::ClockConfig, power_menu::PowerMenuConfig,
-    power_profile::PowerProfileConfig, system_information::SystemInformationConfig,
+    WidgetOption, bluetooth::BluetoothConfig, clock::ClockConfig, network::NetworkConfig,
+    power_menu::PowerMenuConfig, power_profile::PowerProfileConfig,
+    system_information::SystemInformationConfig, volume::VolumeConfig,
 };
 
 #[derive(Deserialize)]
@@ -71,11 +72,17 @@ impl Config {
 #[serde(deny_unknown_fields)]
 pub struct WidgetConfig {
     #[serde(default)]
+    pub bluetooth: BluetoothConfig,
+    #[serde(default)]
     pub clock: ClockConfig,
+    #[serde(default)]
+    pub network: NetworkConfig,
     #[serde(default)]
     pub power_menu: PowerMenuConfig,
     #[serde(default)]
     pub power_profile: PowerProfileConfig,
     #[serde(default)]
     pub system_information: SystemInformationConfig,
+    #[serde(default)]
+    pub volume: VolumeConfig,
 }
