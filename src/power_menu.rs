@@ -1,13 +1,20 @@
-use std::ops::Deref;
+use std::{ops::Deref, time::Duration};
 
 use gpui::{
+    Animation,
+    AnimationExt,
     App,
     Context,
     Entity,
     FocusHandle,
+    Font,
+    FontFeatures,
+    FontStyle,
+    FontWeight,
     KeyBinding,
     PlatformDisplay,
     StatefulInteractiveElement,
+    TextRun,
     Window,
     WindowBackgroundAppearance,
     WindowKind,
@@ -15,6 +22,7 @@ use gpui::{
     actions,
     black,
     div,
+    ease_in_out,
     layer_shell::{KeyboardInteractivity, Layer, LayerShellOptions},
     prelude::*,
     rems,
@@ -80,7 +88,7 @@ impl PowerMenu {
 }
 
 impl Render for PowerMenu {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let wrapper = div()
             .id("power-menu-wrapper")
             .key_context("power-menu")
@@ -113,7 +121,10 @@ impl Render for PowerMenu {
 
         if let Some(selected_option) = self.selected {
             wrapper
-                .child(
+                .child({
+                    let text_size = rems(5.0);
+                    let font_family = "Material Symbols Rounded";
+                    let text = "\u{e5cb}";
                     button()
                         .id("power-menu-back")
                         .on_click(cx.listener(|this, _, _, cx| {
@@ -121,8 +132,39 @@ impl Render for PowerMenu {
                             cx.stop_propagation();
                         }))
                         .px(rems(0.6))
-                        .child("\u{e5cb}"),
-                )
+                        .text_size(text_size)
+                        .font_family(font_family)
+                        .child(text)
+                        .overflow_x_hidden()
+                        .whitespace_nowrap()
+                        .with_animation(
+                            "power-menu-back-name-animation",
+                            Animation::new(Duration::from_millis(500)).with_easing(ease_in_out),
+                            {
+                                let shaped_line = window.text_system().shape_line(
+                                    text.into(),
+                                    text_size.to_pixels(window.rem_size()),
+                                    &[TextRun {
+                                        len: text.len(),
+                                        font: Font {
+                                            family: font_family.into(),
+                                            features: FontFeatures::default(),
+                                            fallbacks: None,
+                                            weight: FontWeight::default(),
+                                            style: FontStyle::default(),
+                                        },
+                                        color: white(),
+                                        background_color: None,
+                                        underline: None,
+                                        strikethrough: None,
+                                    }],
+                                    None,
+                                );
+                                let width = shaped_line.width;
+                                move |element, delta| element.w(width * delta)
+                            },
+                        )
+                })
                 .child(
                     button()
                         .id("power-menu-real")
@@ -136,7 +178,7 @@ impl Render for PowerMenu {
                             };
                             move |_, window, cx| {
                                 // run the command
-                                if let [program, args @ ..] = command.as_slice() {
+                                if let [program, args @ ..] = command.as_ref() {
                                     match Command::new(program).args(args).spawn() {
                                         Ok(mut child) => {
                                             cx.spawn(async move |_| match child.status().await {
@@ -173,12 +215,45 @@ impl Render for PowerMenu {
                         .gap(rems(2.0))
                         .px(rems(2.0))
                         .child(selected_option.icon())
-                        .child(
+                        .child({
+                            let text_size = rems(3.6);
+                            let font_family = "Noto Sans";
+                            let text = selected_option.name();
                             div()
-                                .text_size(rems(3.6))
-                                .font_family("Noto Sans")
-                                .child(selected_option.name()),
-                        ),
+                                .text_size(text_size)
+                                .font_family(font_family)
+                                .child(text)
+                                .overflow_x_hidden()
+                                .whitespace_nowrap()
+                                .with_animation(
+                                    "power-menu-real-name",
+                                    Animation::new(Duration::from_millis(500))
+                                        .with_easing(ease_in_out),
+                                    {
+                                        let shaped_line = window.text_system().shape_line(
+                                            text.into(),
+                                            text_size.to_pixels(window.rem_size()),
+                                            &[TextRun {
+                                                len: text.len(),
+                                                font: Font {
+                                                    family: font_family.into(),
+                                                    features: FontFeatures::default(),
+                                                    fallbacks: None,
+                                                    weight: FontWeight::default(),
+                                                    style: FontStyle::default(),
+                                                },
+                                                color: white(),
+                                                background_color: None,
+                                                underline: None,
+                                                strikethrough: None,
+                                            }],
+                                            None,
+                                        );
+                                        let width = shaped_line.width;
+                                        move |element, delta| element.w(width * delta)
+                                    },
+                                )
+                        }),
                 )
         } else {
             wrapper.children(PowerMenuOption::ALL.map(|option| {
