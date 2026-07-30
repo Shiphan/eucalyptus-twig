@@ -1,4 +1,11 @@
-use std::{ops::Deref, pin::Pin, task::Poll, time::Duration};
+use std::{
+    borrow::Cow,
+    ops::Deref,
+    path::{Path, PathBuf},
+    pin::Pin,
+    task::Poll,
+    time::Duration,
+};
 
 use gpui::{
     App,
@@ -32,8 +39,25 @@ const WIDTH: f32 = 1440.0;
 const HEIGHT: f32 = 40.0;
 
 fn main() {
+    let log_directory = if let Some(xdg_state_home) = std::env::var_os("XDG_STATE_HOME") {
+        Cow::Owned(PathBuf::from(xdg_state_home).join("eucalyptus-twig"))
+    } else if let Some(home) = std::env::home_dir() {
+        Cow::Owned(home.join(".local/state/eucalyptus-twig"))
+    } else {
+        Cow::Borrowed(Path::new("~/.local/state/eucalyptus-twig"))
+    };
     tracing_subscriber::registry()
         .with(tracing_subscriber::fmt::layer().map_fmt_fields(|f| f.debug_alt()))
+        .with(
+            // TODO: consider tracing_appender::non_blocking
+            tracing_subscriber::fmt::layer()
+                .map_fmt_fields(|f| f.debug_alt())
+                .with_ansi(false)
+                .with_writer(tracing_appender::rolling::hourly(
+                    &log_directory,
+                    "eucalyptus-twig.log",
+                )),
+        )
         .with(
             tracing_subscriber::filter::Targets::new()
                 .with_default(tracing::Level::WARN)
@@ -49,6 +73,19 @@ fn main() {
                 ),
         )
         .init();
+    std::panic::set_hook(Box::new(|panic| {
+        if let Some(location) = panic.location() {
+            tracing::error!(
+                message = %panic,
+                panic.file = location.file(),
+                panic.line = location.line(),
+                panic.column = location.column(),
+            );
+        } else {
+            tracing::error!(message = %panic);
+        }
+    }));
+    tracing::info!(log_directory = %log_directory.display());
 
     let config = match Config::load() {
         Ok(x) => x,
