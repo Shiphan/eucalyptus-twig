@@ -73,7 +73,7 @@
             wayland
           ];
 
-          RUSTFLAGS = "-C link-arg=-Wl,--push-state,--no-as-needed,-lwayland-client,-lvulkan,--pop-state";
+          RUSTFLAGS = "-C link-arg=-Wl,--push-state,--no-as-needed,-lvulkan,--pop-state";
 
           meta = {
             description = "";

@@ -1,26 +1,7 @@
-use std::{collections::HashMap, thread};
+use std::{borrow::Cow, collections::HashMap};
 
-use futures::{
-    StreamExt,
-    channel::mpsc::{self, UnboundedSender},
-};
-use gpui::{
-    AsyncApp,
-    Context,
-    InteractiveElement,
-    IntoElement,
-    ParentElement,
-    Render,
-    StatefulInteractiveElement,
-    Styled,
-    WeakEntity,
-    Window,
-    black,
-    div,
-    opaque_grey,
-    red,
-    rems,
-};
+use iced_futures::Subscription;
+use iced_runtime::Task;
 use wayland_client::{
     Connection,
     Dispatch,
@@ -33,178 +14,191 @@ use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
 
 const IGNORE_HIDDEN: bool = true;
 
-pub struct Workspaces {
-    error_message: Option<String>,
-    workspaces: HashMap<ExtWorkspaceHandleV1, Workspace>,
+#[allow(private_interfaces)]
+pub enum Workspaces {
+    Ok {
+        workspaces: HashMap<ExtWorkspaceHandleV1, Workspace>,
+    },
+    Err {
+        message: String,
+    },
 }
 
 impl Widget for Workspaces {
     type Config = ();
 
-    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        cx.spawn(task).detach();
+    type Message = Message;
 
-        Self {
-            error_message: None,
-            workspaces: HashMap::new(),
-        }
+    fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
+        (
+            Self::Ok {
+                workspaces: HashMap::new(),
+            },
+            Task::none(),
+        )
     }
-}
 
-impl Render for Workspaces {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(e) = &self.error_message {
-            return div().child(e.trim().to_owned());
-        }
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match (self, message) {
+            (Self::Ok { workspaces }, Message::NewWorkspace { handle, workspace }) => {
+                workspaces.insert(handle, workspace);
+            }
+            (Self::Ok { workspaces }, Message::WorkspaceEvent { handle, event }) => {
+                use ext_workspace_handle_v1::Event;
 
-        let mut workspaces = self
-            .workspaces
-            .iter()
-            .enumerate()
-            .filter_map(|(index, (handle, workspace))| {
-                if !IGNORE_HIDDEN && workspace.state.hidden {
-                    None
-                } else {
-                    let name = if workspace.state.active {
-                        format!(" > {} < ", workspace.name)
-                    } else {
-                        workspace.name.clone()
-                    };
-
-                    let div = if workspace.state.urgent {
-                        div().text_color(black()).bg(red()).rounded(rems(0.5))
-                    } else if workspace.state.active {
-                        div()
-                            .text_color(black())
-                            .bg(opaque_grey(1.0, 0.75))
-                            .rounded(rems(0.5))
-                    } else {
-                        div()
-                    };
-                    Some((
-                        &workspace.coordinates,
-                        if workspace.capabilities.activate {
-                            div.id(format!("workspace-{index}"))
-                                .on_click({
-                                    let handle = handle.clone();
-                                    move |_, _, _| {
-                                        handle.activate();
-                                    }
-                                })
-                                .child(name)
-                                .into_any_element()
-                        } else {
-                            div.child(name).into_any_element()
-                        },
-                    ))
-                }
-            })
-            .collect::<Vec<_>>();
-        workspaces.sort_by_key(|(x, _)| match x {
-            Some(x) => x.as_slice(),
-            None => &[],
-        });
-
-        div()
-            .flex()
-            .gap(rems(0.5))
-            .children(workspaces.into_iter().map(|(_, x)| x))
-    }
-}
-
-async fn task(this: WeakEntity<Workspaces>, cx: &mut AsyncApp) {
-    let (tx, mut rx) = mpsc::unbounded();
-    // TODO: see if thread is avoidable using `event_queue.poll_dispatch_pending`
-    thread::spawn(move || wayland_thread(tx));
-    while let Some(update) = rx.next().await {
-        let _ = this.update(cx, |this, cx| {
-            match update {
-                Update::NewWorkspace { handle, workspace } => {
-                    this.workspaces.insert(handle, workspace);
-                }
-                Update::WorkspaceEvent { handle, event } => {
-                    use ext_workspace_handle_v1::Event;
-
-                    let Some(workspace) = this.workspaces.get_mut(&handle) else {
-                        tracing::error!(?handle, ?event, "A new event for non-existing workspace");
-                        return;
-                    };
-                    match event {
-                        Event::Id { id } => {
-                            tracing::info!(id);
-                            workspace.id = Some(id);
-                        }
-                        Event::Name { name } => {
-                            tracing::info!(name);
-                            workspace.name = name;
-                        }
-                        Event::Coordinates { coordinates } => {
-                            tracing::info!(?coordinates);
-                            let (coordinates, remainder) = coordinates.as_chunks();
-                            if !remainder.is_empty() {
-                                tracing::warn!(
-                                    remainder,
-                                    "coordinates' length is not multiples of 4"
-                                );
-                            }
-                            let coordinates =
-                                coordinates.iter().map(|x| u32::from_ne_bytes(*x)).collect();
-                            workspace.coordinates = Some(coordinates);
-                        }
-                        Event::State { state } => {
-                            let state = match state.into_result() {
-                                Ok(x) => x,
-                                Err(e) => {
-                                    tracing::error!(error = %e, "Failed to extract state");
-                                    return;
-                                }
-                            };
-                            tracing::info!(?state);
-                            workspace.state = state.into();
-                        }
-                        Event::Capabilities { capabilities } => {
-                            let capabilities = match capabilities.into_result() {
-                                Ok(x) => x,
-                                Err(e) => {
-                                    tracing::error!(error = %e, "Failed to extract state");
-                                    return;
-                                }
-                            };
-                            tracing::info!(?capabilities);
-                            workspace.capabilities = capabilities.into();
-                        }
-                        Event::Removed => {
-                            if this.workspaces.remove(&handle).is_none() {
-                                tracing::error!("Remove event for a non-existing workspace");
-                            }
-                            tracing::info!(?handle, "remove workspace");
-                        }
-                        _ => (),
+                let Some(workspace) = workspaces.get_mut(&handle) else {
+                    tracing::error!(?handle, ?event, "A new event for non-existing workspace");
+                    return;
+                };
+                match event {
+                    Event::Id { id } => {
+                        tracing::info!(id);
+                        workspace.id = Some(id);
                     }
-                }
-                Update::Error(e) => {
-                    this.error_message = Some(e);
+                    Event::Name { name } => {
+                        tracing::info!(name);
+                        workspace.name = name;
+                    }
+                    Event::Coordinates { coordinates } => {
+                        tracing::info!(?coordinates);
+                        let (coordinates, remainder) = coordinates.as_chunks();
+                        if !remainder.is_empty() {
+                            tracing::warn!(remainder, "coordinates' length is not multiples of 4");
+                        }
+                        let coordinates =
+                            coordinates.iter().map(|x| u32::from_ne_bytes(*x)).collect();
+                        workspace.coordinates = Some(coordinates);
+                    }
+                    Event::State { state } => {
+                        let state = match state.into_result() {
+                            Ok(x) => x,
+                            Err(e) => {
+                                tracing::error!(error = %e, "Failed to extract state");
+                                return;
+                            }
+                        };
+                        tracing::info!(?state);
+                        workspace.state = state.into();
+                    }
+                    Event::Capabilities { capabilities } => {
+                        let capabilities = match capabilities.into_result() {
+                            Ok(x) => x,
+                            Err(e) => {
+                                tracing::error!(error = %e, "Failed to extract state");
+                                return;
+                            }
+                        };
+                        tracing::info!(?capabilities);
+                        workspace.capabilities = capabilities.into();
+                    }
+                    Event::Removed => {
+                        if workspaces.remove(&handle).is_none() {
+                            tracing::error!("Remove event for a non-existing workspace");
+                        }
+                        tracing::info!(?handle, "remove workspace");
+                    }
+                    _ => (),
                 }
             }
-            cx.notify();
-        });
+            (Self::Ok { .. }, Message::ActivateWorkspace(handle)) => {
+                handle.activate();
+            }
+            (s, Message::Error(message)) => {
+                *s = Self::Err { message };
+            }
+            (Self::Err { .. }, _) => (),
+        }
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        match self {
+            Self::Ok { workspaces } => {
+                let mut workspaces = workspaces
+                    .iter()
+                    .filter_map(|(handle, workspace)| {
+                        if !IGNORE_HIDDEN && workspace.state.hidden {
+                            None
+                        } else {
+                            let name = if workspace.state.active {
+                                Cow::Owned(format!(" > {} < ", workspace.name))
+                            } else {
+                                Cow::Borrowed(workspace.name.as_str())
+                            };
+
+                            let widget = iced_widget::text(name).style(if workspace.state.urgent {
+                                iced_widget::text::warning
+                            } else if workspace.state.active {
+                                iced_widget::text::secondary
+                            } else {
+                                iced_widget::text::default
+                            });
+                            Some((
+                                &workspace.coordinates,
+                                if workspace.capabilities.activate {
+                                    Element::from(
+                                        iced_widget::mouse_area(widget).on_press(handle.clone()),
+                                    )
+                                    .map(|handle| Message::ActivateWorkspace(handle))
+                                } else {
+                                    widget.into()
+                                },
+                            ))
+                        }
+                    })
+                    .collect::<Vec<_>>();
+                workspaces.sort_by_key(|(x, _)| match x {
+                    Some(x) => x.as_slice(),
+                    None => &[],
+                });
+                iced_widget::row(workspaces.into_iter().map(|(_, x)| x)).into()
+            }
+            Self::Err { message } => iced_widget::text(message.trim()).into(),
+        }
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        match self {
+            Self::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
+            Self::Err { .. } => Subscription::none(),
+        }
     }
 }
 
-fn wayland_thread(tx: UnboundedSender<Update>) {
+#[allow(private_interfaces)]
+pub enum Message {
+    NewWorkspace {
+        handle: ExtWorkspaceHandleV1,
+        workspace: Workspace,
+    },
+    WorkspaceEvent {
+        handle: ExtWorkspaceHandleV1,
+        event: ext_workspace_handle_v1::Event,
+    },
+    ActivateWorkspace(ExtWorkspaceHandleV1),
+    Error(String),
+}
+
+async fn task(tx: iced_runtime::task::Sender<Message>) {
+    // TODO: see if thread is avoidable using `event_queue.poll_dispatch_pending`
+    if let Err(e) = tokio::task::spawn_blocking(move || wayland_thread(tx)).await {
+        tracing::error!(%e, "Join error");
+    }
+}
+
+fn wayland_thread(mut tx: iced_runtime::task::Sender<Message>) {
+    let handle = tokio::runtime::Handle::current();
+
     let connection = match Connection::connect_to_env() {
         Ok(x) => x,
         Err(e) => {
             tracing::error!(error = %e, "Failed to connect to wayland server");
-            if let Err(e) = tx.unbounded_send(Update::Error(format!(
+            handle.block_on(tx.send(Message::Error(format!(
                 "Failed to connect to wayland server: {e}"
-            ))) {
-                tracing::error!(error = %e, "Failed to send update to ui thread");
-            }
+            ))));
             return;
         }
     };
@@ -212,16 +206,11 @@ fn wayland_thread(tx: UnboundedSender<Update>) {
     let mut event_queue = connection.new_event_queue();
     let queue_handle = event_queue.handle();
     let _registry = display.get_registry(&queue_handle, ());
-    let mut state = State::new(tx);
+    let mut state = State::new(handle.clone(), tx.clone());
     loop {
         if let Err(e) = event_queue.blocking_dispatch(&mut state) {
             tracing::error!(error = %e, "Wayland dispatch error");
-            if let Err(e) = state
-                .tx
-                .unbounded_send(Update::Error(format!("Wayland dispatch error: {e}")))
-            {
-                tracing::error!(error = %e, "Failed to send update to ui thread");
-            }
+            handle.block_on(tx.send(Message::Error(format!("Wayland dispatch error: {e}"))));
             break;
         }
         tracing::info!("wayland dispatch");
@@ -292,27 +281,20 @@ struct PendingWorkspace {
     capabilities: Option<ext_workspace_handle_v1::WorkspaceCapabilities>,
 }
 
-enum Update {
-    NewWorkspace {
-        handle: ExtWorkspaceHandleV1,
-        workspace: Workspace,
-    },
-    WorkspaceEvent {
-        handle: ExtWorkspaceHandleV1,
-        event: ext_workspace_handle_v1::Event,
-    },
-    Error(String),
-}
-
 struct State {
-    tx: UnboundedSender<Update>,
+    runtime_handle: tokio::runtime::Handle,
+    tx: iced_runtime::task::Sender<Message>,
     workspace_manager: Option<ExtWorkspaceManagerV1>,
     pending_workspaces: HashMap<ExtWorkspaceHandleV1, PendingWorkspace>,
 }
 
 impl State {
-    fn new(tx: UnboundedSender<Update>) -> Self {
+    fn new(
+        runtime_handle: tokio::runtime::Handle,
+        tx: iced_runtime::task::Sender<Message>,
+    ) -> Self {
         Self {
+            runtime_handle,
             tx,
             workspace_manager: None,
             pending_workspaces: HashMap::new(),
@@ -479,30 +461,30 @@ impl Dispatch<ExtWorkspaceHandleV1, ()> for State {
                 capabilities: Some(capabilities),
             } = pending_workspace
             {
-                if let Err(e) = state.tx.unbounded_send(Update::NewWorkspace {
-                    handle,
-                    workspace: Workspace {
-                        id,
-                        name,
-                        coordinates,
-                        state: workspace_state.into(),
-                        capabilities: capabilities.into(),
-                    },
-                }) {
-                    tracing::error!(error = %e, "Failed to send update to ui thread");
-                }
+                state
+                    .runtime_handle
+                    .block_on(state.tx.send(Message::NewWorkspace {
+                        handle,
+                        workspace: Workspace {
+                            id,
+                            name,
+                            coordinates,
+                            state: workspace_state.into(),
+                            capabilities: capabilities.into(),
+                        },
+                    }));
             } else {
                 tracing::info!(?pending_workspace);
                 state.pending_workspaces.insert(handle, pending_workspace);
             }
             tracing::info!(pending_workspaces = state.pending_workspaces.len());
         } else {
-            if let Err(e) = state.tx.unbounded_send(Update::WorkspaceEvent {
-                handle: proxy.clone(),
-                event,
-            }) {
-                tracing::error!(error = %e, "Failed to send update to ui thread");
-            }
+            state
+                .runtime_handle
+                .block_on(state.tx.send(Message::WorkspaceEvent {
+                    handle: proxy.clone(),
+                    event,
+                }));
         }
     }
 }

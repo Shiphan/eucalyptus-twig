@@ -1,91 +1,167 @@
 use std::time::Duration;
 
-use gpui::{
-    Context,
-    Div,
-    IntoElement,
-    ParentElement,
-    PathBuilder,
-    PathStyle,
-    Render,
-    StrokeOptions,
-    Styled,
-    Window,
-    black,
-    canvas,
-    div,
-    point,
-    px,
-    rems,
-    white,
-};
-use lyon::path::LineCap;
+use iced_core::{Vector, alignment::Vertical};
+use iced_futures::Subscription;
+use iced_runtime::{Task, task::sipper};
+use iced_widget::canvas::{LineCap, Stroke};
 use serde::Deserialize;
 use time::{
     OffsetDateTime,
     Time,
-    error::InvalidFormatDescription,
     format_description::{self, OwnedFormatItem},
 };
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
 
-pub struct Clock {
-    format_description: Result<OwnedFormatItem, InvalidFormatDescription>,
+// TODO: maybe we should use icu4x for localized formatting?
+
+pub enum Clock {
+    Ok {
+        format_description: OwnedFormatItem,
+        formatted_time: String,
+        now: OffsetDateTime,
+    },
+    Err {
+        message: String,
+    },
 }
 
 impl Widget for Clock {
-    type Config = ClockConfig;
+    type Config = Config;
 
-    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
-        let format_description = format_description::parse_owned::<2>(&config.format);
-        if format_description.is_ok() {
-            cx.spawn(async move |this, cx| {
-                loop {
-                    let _ = this.update(cx, |_, cx| cx.notify());
-                    let now = OffsetDateTime::now_local().unwrap();
-                    let next = Time::from_hms(now.time().hour(), now.time().minute(), 0).unwrap()
-                        + Duration::from_mins(1);
-                    cx.background_executor()
-                        .timer(now.time().duration_until(next).unsigned_abs())
-                        .await;
-                }
-            })
-            .detach();
-        }
+    type Message = ();
 
-        Self { format_description }
-    }
-}
-
-impl Render for Clock {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let format_description = match &self.format_description {
+    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
+        let format_description = match format_description::parse_owned::<2>(&config.format) {
             Ok(x) => x,
             Err(e) => {
-                return div().child(format!("Error while parsing time format description: {e}"));
+                return (
+                    Self::Err {
+                        message: format!("Error while parsing time format description: {e}"),
+                    },
+                    Task::none(),
+                );
             }
         };
-        match current_time(format_description) {
-            Ok((clock, formatted_time)) => div()
-                .flex()
-                .items_center()
-                .gap(rems(0.25))
-                .child(clock)
-                .child(formatted_time),
-            Err(e) => div().child(e),
+
+        let now = match OffsetDateTime::now_local() {
+            Ok(x) => x,
+            Err(e) => {
+                return (
+                    Self::Err {
+                        message: format!("Error while getting local time: {e}"),
+                    },
+                    Task::none(),
+                );
+            }
+        };
+
+        let formatted_time = match now.format(&format_description) {
+            Ok(x) => x,
+            Err(e) => {
+                return (
+                    Self::Err {
+                        message: format!("Error while formatting time `{now}`: {e}"),
+                    },
+                    Task::none(),
+                );
+            }
+        };
+
+        (
+            Self::Ok {
+                format_description,
+                formatted_time,
+                now,
+            },
+            Task::none(),
+        )
+    }
+
+    fn update(&mut self, (): Self::Message) -> impl Into<Task<Self::Message>> {
+        let Self::Ok {
+            format_description,
+            formatted_time,
+            now,
+        } = self
+        else {
+            return;
+        };
+
+        *now = match OffsetDateTime::now_local() {
+            Ok(x) => x,
+            Err(e) => {
+                *self = Self::Err {
+                    message: format!("Error while getting local time: {e}"),
+                };
+                return;
+            }
+        };
+
+        *formatted_time = match now.format(&format_description) {
+            Ok(x) => x,
+            Err(e) => {
+                *self = Self::Err {
+                    message: format!("Error while formatting time `{now}`: {e}"),
+                };
+                return;
+            }
+        };
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        match self {
+            Self::Ok {
+                formatted_time,
+                now,
+                ..
+            } => iced_widget::container(
+                iced_widget::row![
+                    iced_widget::canvas(AnalogClock {
+                        hour_hand_radians: (90.0
+                            - now.hour() as f32 * 30.0
+                            - now.minute() as f32 * 0.5)
+                            .to_radians(),
+                        minute_hand_radians: (90.0 - now.minute() as f32 * 6.0).to_radians(),
+                    })
+                    .width(16)
+                    .height(16),
+                    iced_widget::text(formatted_time),
+                ]
+                .align_y(Vertical::Center),
+            )
+            .into(),
+            Self::Err { message } => iced_widget::text(message).into(),
+        }
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        match self {
+            Self::Ok { .. } => Subscription::run(|| {
+                sipper(async |mut tx| {
+                    loop {
+                        let now = OffsetDateTime::now_local().unwrap();
+                        let next = Time::from_hms(now.time().hour(), now.time().minute(), 0)
+                            .unwrap()
+                            + Duration::from_mins(1);
+                        tokio::time::sleep(now.time().duration_until(next).unsigned_abs()).await;
+                        tx.send(()).await;
+                    }
+                })
+            }),
+            Self::Err { .. } => Subscription::none(),
         }
     }
 }
 
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct ClockConfig {
+pub struct Config {
     #[serde(default = "default_format_string")]
     format: String,
 }
 
-impl Default for ClockConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             format: default_format_string(),
@@ -97,49 +173,55 @@ fn default_format_string() -> String {
     "[month padding:none repr:numerical]/[day padding:none] [weekday repr:short] [hour padding:none repr:12]:[minute padding:zero] [period case:upper]".to_owned()
 }
 
-// TODO: maybe we should use icu4x for localized formatting?
-fn current_time(format_description: &OwnedFormatItem) -> Result<(Div, String), String> {
-    let time =
-        OffsetDateTime::now_local().map_err(|e| format!("Error while getting local time: {e}"))?;
-    let clock = div().relative().size_4().rounded_full().bg(white()).child(
-        canvas(
-            |_, _, _| (),
-            move |bounds, _, window, _| {
-                let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
-                    StrokeOptions::default()
-                        .with_line_cap(LineCap::Round)
-                        .with_line_width(2.0),
-                ));
-                path.move_to(point(px(0.0), px(0.0)));
-                path.line_to(point(px(0.0), px(-4.4)));
-                path.rotate(time.time().minute() as f32 * 6.0);
-                path.translate(bounds.center());
-                match path.build() {
-                    Ok(path) => window.paint_path(path, black()),
-                    Err(e) => tracing::error!(error = %e, "Failed to build path for minute hand"),
-                }
+struct AnalogClock {
+    hour_hand_radians: f32,
+    minute_hand_radians: f32,
+}
 
-                let mut path = PathBuilder::default().with_style(PathStyle::Stroke(
-                    StrokeOptions::default()
-                        .with_start_cap(LineCap::Round)
-                        .with_end_cap(LineCap::Round)
-                        .with_line_width(2.0),
-                ));
-                path.move_to(point(px(0.0), px(0.0)));
-                path.line_to(point(px(0.0), px(-2.6)));
-                path.rotate(time.time().hour() as f32 * 30.0 + time.time().minute() as f32 * 0.5);
-                path.translate(bounds.center());
-                match path.build() {
-                    Ok(path) => window.paint_path(path, black()),
-                    Err(e) => tracing::error!(error = %e, "Failed to build path for hour hand"),
-                }
-            },
-        )
-        .size_full(),
-    );
-    let formatted_time = time
-        .format(format_description)
-        .map_err(|e| format!("Error while formatting time `{time}`: {e}"))?;
+impl<Message> iced_widget::canvas::Program<Message> for AnalogClock {
+    type State = ();
 
-    Ok((clock, formatted_time))
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &iced_renderer::Renderer,
+        theme: &iced_widget::renderer::core::Theme,
+        bounds: iced_core::Rectangle,
+        _cursor: iced_core::mouse::Cursor,
+    ) -> Vec<iced_widget::canvas::Geometry> {
+        use iced_widget::canvas;
+
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let max_radius = frame.width().min(frame.height()) / 2.0;
+
+        let background = canvas::Path::circle(frame.center(), max_radius * 0.8);
+        frame.fill(&background, theme.palette().text);
+
+        let stroke = Stroke::default()
+            .with_width(2.0)
+            .with_color(theme.palette().primary)
+            .with_line_cap(LineCap::Round);
+
+        let hour_hand_length = max_radius * 0.3;
+        let hour_hand = canvas::Path::line(
+            frame.center(),
+            frame.center()
+                + Vector::new(self.hour_hand_radians.cos(), -self.hour_hand_radians.sin())
+                    * hour_hand_length,
+        );
+        frame.stroke(&hour_hand, stroke);
+
+        let minute_hand_length = max_radius * 0.5;
+        let minute_hand = canvas::Path::line(
+            frame.center(),
+            frame.center()
+                + Vector::new(
+                    self.minute_hand_radians.cos(),
+                    -self.minute_hand_radians.sin(),
+                ) * minute_hand_length,
+        );
+        frame.stroke(&minute_hand, stroke);
+
+        vec![frame.into_geometry()]
+    }
 }

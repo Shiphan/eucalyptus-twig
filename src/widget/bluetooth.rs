@@ -1,6 +1,5 @@
 use std::{collections::HashSet, pin::pin};
 
-use async_compat::Compat;
 use bluer::{
     Adapter,
     AdapterEvent,
@@ -12,101 +11,161 @@ use bluer::{
     SessionEvent,
 };
 use futures::StreamExt;
-use gpui::{
-    AsyncApp,
-    Context,
-    InteractiveElement,
-    IntoElement,
-    ParentElement,
-    Render,
-    StatefulInteractiveElement,
-    WeakEntity,
-    Window,
-    div,
-};
+use iced_core::Font;
+use iced_futures::Subscription;
+use iced_runtime::Task;
 use serde::Deserialize;
 
-use crate::widget::{Widget, spawn_detached_command};
+use crate::{
+    application::Element,
+    widget::{Widget, spawn_detached_command},
+};
 
 pub struct Bluetooth {
-    config: BluetoothConfig,
-    error_message: Option<String>,
-    powered: Option<bool>,
-    discovering: Option<bool>,
-    connected_devices: HashSet<Address>,
+    config: Config,
+    state: State,
+}
+
+enum State {
+    Ok {
+        powered: Option<bool>,
+        discovering: Option<bool>,
+        connected_devices: HashSet<Address>,
+    },
+    Err {
+        message: String,
+    },
 }
 
 impl Widget for Bluetooth {
-    type Config = BluetoothConfig;
+    type Config = Config;
 
-    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
-        cx.spawn(async |this, cx| Compat::new(task(this, cx)).await)
-            .detach();
+    type Message = Message;
 
-        Self {
-            config: config.clone(),
-            error_message: None,
-            powered: None,
-            discovering: None,
-            connected_devices: HashSet::new(),
+    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
+        (
+            Self {
+                config: config.clone(),
+                state: State::Ok {
+                    powered: None,
+                    discovering: None,
+                    connected_devices: HashSet::new(),
+                },
+            },
+            Task::none(),
+        )
+    }
+
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match (&mut self.state, message) {
+            (
+                State::Ok {
+                    connected_devices, ..
+                },
+                Message::DeviceAdded(address),
+            ) => {
+                connected_devices.insert(address);
+                Task::none()
+            }
+            (
+                State::Ok {
+                    connected_devices, ..
+                },
+                Message::DeviceRemoved(address),
+            ) => {
+                let was_connected = connected_devices.remove(&address);
+                tracing::info!(%address, was_connected, "Removed a device");
+                Task::none()
+            }
+            (State::Ok { powered, .. }, Message::Powered(p)) => {
+                *powered = Some(p);
+                Task::none()
+            }
+            (State::Ok { discovering, .. }, Message::Discovering(d)) => {
+                *discovering = Some(d);
+                Task::none()
+            }
+            (s, Message::Clear) => {
+                *s = State::Ok {
+                    powered: None,
+                    discovering: None,
+                    connected_devices: HashSet::new(),
+                };
+                Task::none()
+            }
+            (_, Message::LaunchSettings) => {
+                if let Some(command) = &self.config.settings_command {
+                    spawn_detached_command(command, "widget.bluetooth.settings_command").discard()
+                } else {
+                    Task::none()
+                }
+            }
+            (s, Message::Error(message)) => {
+                *s = State::Err { message };
+                Task::none()
+            }
+            (State::Err { .. }, _) => Task::none(),
         }
     }
-}
 
-impl Bluetooth {
-    fn clear(&mut self) {
-        self.error_message = None;
-        self.powered = None;
-        self.discovering = None;
-        self.connected_devices = HashSet::new();
-    }
-}
-
-impl Render for Bluetooth {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        let widget = if let Some(e) = &self.error_message {
-            div().child(e.clone())
-        } else {
-            match self.powered {
-                Some(true) => {
-                    if self.discovering == Some(true) {
-                        div().child("\u{e1aa}")
-                    } else if self.connected_devices.len() == 0 {
-                        div().child("\u{e1a7}")
-                    } else {
-                        div().child("\u{e1a8}")
-                    }
-                }
-                Some(false) => div().child("\u{e1a9}"),
-                None => div().child("?"),
+    fn view(&self) -> Element<'_, Self::Message> {
+        let widget = match &self.state {
+            State::Ok {
+                powered: Some(true),
+                discovering: Some(true),
+                ..
+            } => iced_widget::text("\u{e1aa}").font(Font::with_name("Material Symbols Rounded")),
+            State::Ok {
+                powered: Some(true),
+                connected_devices,
+                ..
+            } if connected_devices.is_empty() => {
+                iced_widget::text("\u{e1a7}").font(Font::with_name("Material Symbols Rounded"))
             }
+            State::Ok {
+                powered: Some(true),
+                ..
+            } => iced_widget::text("\u{e1a7}").font(Font::with_name("Material Symbols Rounded")),
+            State::Ok {
+                powered: Some(false),
+                ..
+            } => iced_widget::text("\u{e1a8}").font(Font::with_name("Material Symbols Rounded")),
+            State::Ok { powered: None, .. } => {
+                iced_widget::text("?").font(Font::with_name("Material Symbols Rounded"))
+            }
+            State::Err { message } => iced_widget::text(message),
         };
+        iced_widget::mouse_area(widget)
+            .on_press(Message::LaunchSettings)
+            .into()
+    }
 
-        if let Some(command) = &self.config.settings_command {
-            let command = command.clone();
-            widget
-                .id("network")
-                .on_click(move |_, _, cx| {
-                    spawn_detached_command(
-                        cx,
-                        command.as_ref(),
-                        "widget.bluetooth.settings_command",
-                    )
-                })
-                .into_any_element()
-        } else {
-            widget.into_any_element()
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        match self.state {
+            State::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
+            State::Err { .. } => Subscription::none(),
         }
     }
 }
 
 #[derive(Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct BluetoothConfig {
+pub struct Config {
     pub settings_command: Option<Box<[String]>>,
 }
 
-async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
+#[derive(Clone)]
+pub enum Message {
+    DeviceAdded(Address),
+    DeviceRemoved(Address),
+    Powered(bool),
+    Discovering(bool),
+    Clear,
+    LaunchSettings,
+    Error(String),
+}
+
+async fn task(mut tx: iced_runtime::task::Sender<Message>) {
     let session = match Session::new().await {
         Ok(x) => x,
         Err(e) => {
@@ -119,21 +178,17 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
         Ok(x) => x,
         Err(e) => {
             tracing::error!(error = %e, "Failed to get default bluetooth adapter");
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("Failed to get default bluetooth adapter: {e}"));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!(
+                "Failed to get default bluetooth adapter: {e}"
+            ))).await;
             return;
         }
     };
     loop {
         tracing::info!(default_adapter_name = adapter.name());
-        monitor_adapter(adapter, &this, cx).await;
+        monitor_adapter(adapter, &mut tx).await;
 
-        let _ = this.update(cx, |this, cx| {
-            this.clear();
-            cx.notify();
-        });
+        tx.send(Message::Clear).await;
         tracing::warn!("event stream of default adapter ended");
 
         match session.default_adapter().await {
@@ -168,14 +223,11 @@ async fn task(this: WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
     }
 }
 
-async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &mut AsyncApp) {
+async fn monitor_adapter(adapter: Adapter, tx: &mut iced_runtime::task::Sender<Message>) {
     match adapter.is_powered().await {
         Ok(is_powered) => {
             tracing::info!(is_powered, "Adapter property");
-            let _ = entity.update(cx, |this, cx| {
-                this.powered = Some(is_powered);
-                cx.notify();
-            });
+            tx.send(Message::Powered(is_powered)).await;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to get if default adapter is powered");
@@ -184,10 +236,7 @@ async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &
     match adapter.is_discovering().await {
         Ok(discovering) => {
             tracing::info!(discovering, "Adapter property");
-            let _ = entity.update(cx, |this, cx| {
-                this.discovering = Some(discovering);
-                cx.notify();
-            });
+            tx.send(Message::Discovering(discovering)).await;
         }
         Err(e) => {
             tracing::error!(error = %e, "Failed to get if default adapter is discovering");
@@ -196,7 +245,7 @@ async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &
     match adapter.device_addresses().await {
         Ok(addresses) => {
             for address in addresses {
-                try_monitor_device(&adapter, address, entity.clone(), cx).await;
+                try_monitor_device(&adapter, address, tx).await;
             }
         }
         Err(e) => {
@@ -207,12 +256,10 @@ async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &
         Ok(x) => x,
         Err(e) => {
             tracing::error!(error = %e, "Failed to get event stream of default adapter");
-            let _ = entity.update(cx, |this, cx| {
-                this.error_message = Some(format!(
-                    "Failed to get event stream of default adapter: {e}"
-                ));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!(
+                "Failed to get event stream of default adapter: {e}"
+            )))
+            .await;
             return;
         }
     };
@@ -220,28 +267,18 @@ async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &
         tracing::debug!(?event, "Bluetooth event");
         match event {
             AdapterEvent::DeviceAdded(address) => {
-                try_monitor_device(&adapter, address, entity.clone(), cx).await;
+                try_monitor_device(&adapter, address, tx).await;
             }
             AdapterEvent::DeviceRemoved(address) => {
-                let _ = entity.update(cx, |this, cx| {
-                    let was_connected = this.connected_devices.remove(&address);
-                    tracing::info!(%address, was_connected, "Removed a device");
-                    cx.notify();
-                });
+                tx.send(Message::DeviceRemoved(address)).await;
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Powered(powered)) => {
                 tracing::info!(powered, "Adapter property changed");
-                let _ = entity.update(cx, |this, cx| {
-                    this.powered = Some(powered);
-                    cx.notify();
-                });
+                tx.send(Message::Powered(powered)).await;
             }
             AdapterEvent::PropertyChanged(AdapterProperty::Discovering(discovering)) => {
                 tracing::info!(discovering, "Adapter property changed");
-                let _ = entity.update(cx, |this, cx| {
-                    this.discovering = Some(discovering);
-                    cx.notify();
-                });
+                tx.send(Message::Discovering(discovering)).await;
             }
             _ => (),
         }
@@ -251,8 +288,7 @@ async fn monitor_adapter(adapter: Adapter, entity: &WeakEntity<Bluetooth>, cx: &
 async fn try_monitor_device(
     adapter: &Adapter,
     address: Address,
-    entity: WeakEntity<Bluetooth>,
-    cx: &mut AsyncApp,
+    tx: &mut iced_runtime::task::Sender<Message>,
 ) {
     let device = match adapter.device(address) {
         Ok(x) => x,
@@ -261,47 +297,41 @@ async fn try_monitor_device(
             return;
         }
     };
+    let device_name = device.name().await;
     match device.is_connected().await {
         Ok(is_connected) => {
-            tracing::info!(%address, name = ?device.name().await, is_connected, "Device property");
-            let _ = entity.update(cx, |this, cx| {
-                if is_connected {
-                    this.connected_devices.insert(address);
-                }
-                cx.notify();
-            });
+            tracing::info!(%address, ?device_name, is_connected, "Device property");
+            if is_connected {
+                tx.send(Message::DeviceAdded(address)).await;
+            }
         }
         Err(e) => {
-            tracing::error!(%address, name = ?device.name().await, error = %e, "Failed to get if device is connected");
+            tracing::error!(%address, ?device_name, error = %e, "Failed to get if device is connected");
         }
     }
     let mut events = match device.events().await {
         Ok(x) => x,
         Err(e) => {
-            tracing::error!(%address, name = ?device.name().await, error = %e, "Failed to get device event stream");
+            tracing::error!(%address, ?device_name, error = %e, "Failed to get device event stream");
             return;
         }
     };
-    tracing::info!(%address, name = ?device.name().await, "Monitoring a device");
-    cx.spawn(async move |cx| {
+    tracing::info!(%address, ?device_name, "Monitoring a device");
+    let mut tx = tx.clone();
+    tokio::spawn(async move {
         while let Some(event) = events.next().await {
             match event {
-                DeviceEvent::PropertyChanged(
-                    DeviceProperty::Connected(connected),
-                ) => {
-                    let _ = entity.update(cx, |this, cx| {
-                        let was_connected = if connected {
-                            !this.connected_devices.insert(address)
-                        } else {
-                            this.connected_devices.remove(&address)
-                        };
-                        tracing::info!(%address, connected, was_connected, "Device property changed");
-                        cx.notify();
-                    });
+                DeviceEvent::PropertyChanged(DeviceProperty::Connected(connected)) => {
+                    tracing::info!(%address, connected, "Device property changed");
+                    tx.send(if connected {
+                        Message::DeviceAdded(address)
+                    } else {
+                        Message::DeviceRemoved(address)
+                    })
+                    .await;
                 }
                 _ => (),
             }
         }
-    })
-    .detach();
+    });
 }

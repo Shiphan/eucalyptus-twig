@@ -1,91 +1,127 @@
 use std::{
-    collections::{BTreeMap, btree_map},
+    collections::BTreeMap,
     env,
     fmt::Display,
     path::Path,
 };
 
-use futures::{
-    AsyncReadExt,
-    AsyncWriteExt,
-    io::{AsyncBufReadExt, BufReader},
-};
-use gpui::{
-    AsyncApp,
-    Context,
-    IntoElement,
-    ParentElement,
-    Render,
-    Styled,
-    WeakEntity,
-    Window,
-    black,
-    div,
-    opaque_grey,
-    rems,
-};
+use iced_futures::Subscription;
+use iced_runtime::Task;
 use serde::Deserialize;
-use smol::net::unix::UnixStream;
+use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::UnixStream};
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
 
 pub struct HyprlandWorkspace {
-    error_message: Option<String>,
     workspaces: BTreeMap<i64, WorkspaceInfo>,
     active_workspace: Option<i64>,
     active_special_workspace: Option<i64>,
+    error_message: Option<String>,
 }
 
 impl Widget for HyprlandWorkspace {
     type Config = ();
 
-    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        cx.spawn(info).detach();
+    type Message = Message;
 
-        Self {
-            error_message: None,
-            workspaces: BTreeMap::new(),
-            active_workspace: None,
-            active_special_workspace: None,
+    fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
+        (
+            Self {
+                workspaces: BTreeMap::new(),
+                active_workspace: None,
+                active_special_workspace: None,
+                error_message: None,
+            },
+            Task::none(),
+        )
+    }
+
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match message {
+            Message::NewWorkspace { id, info } => {
+                if let Some(old) = self.workspaces.insert(id, info) {
+                    tracing::warn!("Received a `createworkspacev2` with id = {id} , but there is already an old workspace with name = {}", old.name);
+                }
+            }
+            Message::RemoveWorkspace { id, name } => {
+                match self.workspaces.remove(&id) {
+                    Some(old) if old.name != name => {
+                        tracing::warn!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but the old name is not the same: `{}`", old.name);
+                    }
+                    None => {
+                        tracing::error!("Received a `destroyworkspacev2` with id = {id}, but there is no workspace with same id");
+                    }
+                    _ => (),
+                }
+            }
+            Message::NewActiveWorkspace(id) => {
+                self.active_workspace = id;
+            }
+            Message::NewActiveSpecialWorkspace(id) => {
+                self.active_special_workspace = id;
+            }
+            Message::SetWorkspapces(workspaces) => {
+                self.workspaces = workspaces;
+            }
+            Message::Error(message) => {
+                self.error_message = Some(message);
+            }
+            Message::ClearError => {
+                self.error_message = None;
+            }
         }
     }
-}
 
-impl Render for HyprlandWorkspace {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(e) = &self.error_message {
-            return div().child(e.trim().to_owned());
-        }
-
-        div()
-            .flex()
-            .gap(rems(0.5))
-            .children(self.workspaces.iter().map(|(&id, info)| {
-                if Some(id) == self.active_workspace || Some(id) == self.active_special_workspace {
-                    div()
-                        .text_color(black())
-                        .bg(opaque_grey(1.0, 0.75))
-                        .rounded(rems(0.5))
-                        .child(format!(" > {} < ", info.name))
+    fn view(&self) -> Element<'_, Self::Message> {
+        match self {
+            Self {
+                workspaces,
+                active_workspace,
+                active_special_workspace,
+                error_message: None,
+            } => iced_widget::row(workspaces.iter().map(|(&id, info)| {
+                if Some(id) == *active_workspace || Some(id) == *active_special_workspace {
+                    iced_widget::text!(" > {} < ", info.name)
+                        .style(iced_widget::text::secondary).into()
                 } else {
-                    div().child(info.name.clone())
+                    iced_widget::text(&info.name).into()
                 }
             }))
-        // .child(format!("special: {:?}", self.active_special_workspace))
-        // .child(format!("workspace: {:?}", self.active_workspace))
+            .into(),
+            Self { error_message: Some(message), .. } => iced_widget::text(message).into(),
+        }
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        Subscription::run(|| iced_runtime::task::sipper(task))
     }
 }
 
-async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
+#[allow(private_interfaces)]
+pub enum Message {
+    NewWorkspace {
+        id: i64,
+        info: WorkspaceInfo
+    },
+    RemoveWorkspace {
+        id: i64,
+        name: String,
+    },
+    NewActiveWorkspace(Option<i64>),
+    NewActiveSpecialWorkspace(Option<i64>),
+    SetWorkspapces(BTreeMap<i64, WorkspaceInfo>),
+    Error(String),
+    ClearError,
+}
+
+async fn task(mut tx: iced_runtime::task::Sender<Message>) {
     let hyprland_instance_signature = match env::var("HYPRLAND_INSTANCE_SIGNATURE") {
         Ok(x) => x,
         Err(e) => {
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!(
-                    "error while getting HYPRLAND_INSTANCE_SIGNATURE: {e}"
-                ));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!(
+                "error while getting HYPRLAND_INSTANCE_SIGNATURE: {e}"
+            )))
+            .await;
             return;
         }
     };
@@ -94,10 +130,10 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
         Err(e) => {
             // TODO: use the fallback format!("/run/user/{uid}/hypr"):
             // <https://github.com/hyprwm/Hyprland/blob/main/hyprctl/src/main.cpp>
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("error while getting XDG_RUNTIME_DIR: {e}"));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!(
+                "error while getting XDG_RUNTIME_DIR: {e}"
+            )))
+            .await;
             return;
         }
     };
@@ -105,17 +141,15 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
     let event_socket_path = format!("{runtime_dir}/{hyprland_instance_signature}/.socket2.sock");
     let command_socket_path = format!("{runtime_dir}/{hyprland_instance_signature}/.socket.sock");
 
-    try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+    try_update_with_get_workspace(&command_socket_path, &mut tx).await;
 
     let mut event_stream = match UnixStream::connect(&event_socket_path).await {
         Ok(x) => BufReader::new(x),
         Err(e) => {
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!(
-                    "error while connecting to hyprland socket ({event_socket_path}): {e}"
-                ));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!(
+                "error while connecting to hyprland socket ({event_socket_path}): {e}"
+            )))
+            .await;
             return;
         }
     };
@@ -124,17 +158,10 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
         let mut line = String::new();
         match event_stream.read_line(&mut line).await {
             Ok(_) => {
-                let _ = this.update(cx, |this, cx| {
-                    this.error_message = None;
-                    cx.notify();
-                });
+                tx.send(Message::ClearError).await;
             }
             Err(e) => {
-                let _ = this.update(cx, |this, cx| {
-                    this.error_message = Some(format!("error while reading the socket: {e}"));
-                    tracing::error!("Error while reading the socket: {e}");
-                    cx.notify();
-                });
+                tx.send(Message::Error(format!("error while reading the socket: {e}"))).await;
                 break;
             }
         };
@@ -144,66 +171,39 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
             if let Some((id, name)) = line.split_once(",") {
                 match id.parse() {
                     Ok(id) => {
-                        let _ = this.update(cx, |this, cx| {
-                            let workspace = WorkspaceInfo { name: name.to_owned() };
-                            match this.workspaces.entry(id) {
-                                btree_map::Entry::Occupied(mut entry) => {
-                                    let old = entry.insert(workspace);
-                                    tracing::warn!("Received a `createworkspacev2` with id = {id} and name = {name}, but there is already an old workspace with name = {}", old.name);
-                                    // TODO: Maybe use try_update_with_get_workspace
-                                }
-                                btree_map::Entry::Vacant(entry) => {
-                                    entry.insert(workspace);
-                                }
-                            }
-                            cx.notify();
-                        });
+                        tx.send(Message::NewWorkspace { id, info: WorkspaceInfo { name: name.to_owned() } }).await;
                     }
                     Err(e) => {
                         tracing::error!(
                             "Failed to parse the id ({id}) from `createworkspacev2`: {e}"
                         );
-                        try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                        try_update_with_get_workspace(&command_socket_path, &mut tx).await;
                     }
                 }
             } else {
                 tracing::error!(
                     "Received a `createworkspacev2` update `{line}`, but it doesn't contain any `,`"
                 );
-                try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                try_update_with_get_workspace(&command_socket_path, &mut tx).await;
             }
         } else if let Some(line) = line.strip_prefix("destroyworkspacev2>>") {
             if let Some((id, name)) = line.split_once(",") {
                 match id.parse() {
                     Ok(id) => {
-                        let _ = this.update(cx, |this, cx| {
-                            match this.workspaces.entry(id) {
-                                btree_map::Entry::Occupied(entry) => {
-                                    let old = entry.remove();
-                                    if old.name != name {
-                                        tracing::warn!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but the old name is not the same: `{}`", old.name);
-                                    }
-                                }
-                                btree_map::Entry::Vacant(_) => {
-                                    tracing::error!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but there is no workspace with same id");
-                                    // TODO: Maybe use try_update_with_get_workspace
-                                }
-                            }
-                            cx.notify();
-                        });
+                        tx.send(Message::RemoveWorkspace { id, name: name.to_owned() }).await;
                     }
                     Err(e) => {
                         tracing::error!(
                             "Failed to parse the id ({id}) from `destroyworkspacev2`: {e}"
                         );
-                        try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                        try_update_with_get_workspace(&command_socket_path, &mut tx).await;
                     }
                 }
             } else {
                 tracing::error!(
                     "Received a `destroyworkspacev2` update `{line}`, but it doesn't contain any `,`"
                 );
-                try_update_with_get_workspace(&command_socket_path, &this, cx).await;
+                try_update_with_get_workspace(&command_socket_path, &mut tx).await;
             }
         } else if let Some(line) = line.strip_prefix("workspacev2>>") {
             let Some((id, _)) = line.split_once(",") else {
@@ -224,10 +224,7 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 }
             };
 
-            let _ = this.update(cx, |this, cx| {
-                this.active_workspace = id;
-                cx.notify();
-            });
+            tx.send(Message::NewActiveWorkspace(id)).await;
         } else if let Some(line) = line.strip_prefix("activespecialv2>>") {
             let Some((id, _)) = line.split_once(",") else {
                 tracing::error!(
@@ -249,36 +246,26 @@ async fn info(this: WeakEntity<HyprlandWorkspace>, cx: &mut AsyncApp) {
                 }
             };
 
-            let _ = this.update(cx, |this, cx| {
-                this.active_special_workspace = id;
-                cx.notify();
-            });
+            tx.send(Message::NewActiveSpecialWorkspace(id)).await;
         };
     }
 }
 
 async fn try_update_with_get_workspace<P>(
     command_socket_path: P,
-    entity: &WeakEntity<HyprlandWorkspace>,
-    cx: &mut AsyncApp,
+    tx: &mut iced_runtime::task::Sender<Message>,
 ) where
     P: AsRef<Path> + Display + Copy,
 {
     match get_workspaces(command_socket_path).await {
         Ok(workspaces) => {
-            let _ = entity.update(cx, |this, cx| {
-                this.workspaces = workspaces;
-                cx.notify();
-            });
+            tx.send(Message::SetWorkspapces(workspaces)).await;
         }
         Err(e) => {
             tracing::error!(
                 "Failed to get workspaces from hyprland socket at `{command_socket_path}`: {e}"
             );
-            let _ = entity.update(cx, |this, cx| {
-                this.error_message = Some(e);
-                cx.notify();
-            });
+            tx.send(Message::Error(e)).await;
         }
     }
 }
@@ -315,7 +302,7 @@ where
         .await
         .map_err(|e| format!("read_to_end error: {e}"))?;
 
-    let _ = stream.close().await;
+    let _ = stream.shutdown().await;
 
     let workspaces = serde_json::from_slice::<Vec<WorkspaceInfoRaw>>(&buffer)
         .map_err(|e| format!("parsing `{:?}`: {e}", String::from_utf8(buffer)))?;

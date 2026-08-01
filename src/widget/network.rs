@@ -1,95 +1,119 @@
 use futures::StreamExt;
-use gpui::{
-    AsyncApp,
-    Context,
-    InteractiveElement,
-    IntoElement,
-    ParentElement,
-    Render,
-    StatefulInteractiveElement,
-    Styled,
-    WeakEntity,
-    Window,
-    div,
-};
+use iced_core::Font;
+use iced_futures::Subscription;
+use iced_runtime::{Task, task::{Sender}};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use zbus::zvariant;
 
-use crate::widget::{Widget, spawn_detached_command};
+use crate::{application::Element, widget::{Widget, spawn_detached_command}};
+
+// TODO: Add
+// 1. support of both wifi and wired network
+// 2. wifi strength: <https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.AccessPoint.html#gdbus-property-org-freedesktop-NetworkManager-AccessPoint.Strength>
 
 pub struct Network {
-    config: NetworkConfig,
-    error_message: Option<String>,
-    state: Option<NetworkManagerState>,
-    primary_connection_type: Option<String>,
+    config: Config,
+    state: State,
 }
 
-impl Widget for Network {
-    type Config = NetworkConfig;
-
-    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
-        cx.spawn(task).detach();
-
-        Self {
-            config: config.clone(),
-            error_message: None,
-            state: None,
-            primary_connection_type: None,
-        }
+enum State {
+    Ok {
+        state: Option<NetworkManagerState>,
+        primary_connection_type: Option<String>,
+    },
+    Err {
+        message: String,
     }
 }
 
-impl Render for Network {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        // TODO: Add
-        // 1. support of both wifi and wired network
-        // 2. wifi strength: <https://networkmanager.dev/docs/api/latest/gdbus-org.freedesktop.NetworkManager.AccessPoint.html#gdbus-property-org-freedesktop-NetworkManager-AccessPoint.Strength>
-        let _ = self.primary_connection_type;
+impl Widget for Network {
+    type Config = Config;
 
-        let widget = div().child(div().font_family("Material Symbols Rounded").child(
-            match self.state {
-                Some(NetworkManagerState::Disabled | NetworkManagerState::Disconnected) => {
-                    "\u{e1da}"
-                } // Signal Wifi Off
-                Some(NetworkManagerState::Disconnecting) => "\u{f063}", // Signal Wifi Bad
-                Some(NetworkManagerState::Connecting) => "\u{eb31}",    // Wifi Find
-                Some(NetworkManagerState::ConnectedLocal | NetworkManagerState::ConnectedSite) => {
-                    "\u{eb2f}"
-                } // Lan
-                Some(NetworkManagerState::ConnectedGlobal) => "\u{e80b}", // Public
-                Some(NetworkManagerState::Unknown) | None => "?",
-            },
-        ));
+    type Message = Message;
 
-        if let Some(command) = &self.config.settings_command {
-            let command = command.clone();
-            widget
-                .id("network")
-                .on_click(move |_, _, cx| {
-                    spawn_detached_command(cx, command.as_ref(), "widget.network.settings_command")
-                })
-                .into_any_element()
-        } else {
-            widget.into_any_element()
+    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
+        (Self { config: config.clone(), state: State::Ok { state: None, primary_connection_type: None } }, Task::none())
+    }
+
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match (&mut self.state, message) {
+            (State::Ok { state, .. }, Message::NewState(network_manager_state)) => {
+                *state = Some(network_manager_state);
+                Task::none()
+            }
+            (State::Ok { primary_connection_type, .. }, Message::NewConnectionType(t)) => {
+                *primary_connection_type = Some(t);
+                Task::none()
+            }
+            (_, Message::LaunchSettings) => {
+                if let Some(command) = &self.config.settings_command {
+                    spawn_detached_command(command, "widget.network.settings_command").discard()
+                } else {
+                    Task::none()
+                }
+            }
+            (s, Message::Error(message)) => {
+                *s = State::Err { message };
+                Task::none()
+            }
+            (State::Err { .. }, _) => Task::none(),
+        }
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        let widget = match &self.state {
+            State::Ok { state, primary_connection_type } => {
+                let _ = primary_connection_type;
+
+                let icon = match state {
+                    Some(NetworkManagerState::Disabled | NetworkManagerState::Disconnected) => {
+                        "\u{e1da}"
+                    } // Signal Wifi Off
+                    Some(NetworkManagerState::Disconnecting) => "\u{f063}", // Signal Wifi Bad
+                    Some(NetworkManagerState::Connecting) => "\u{eb31}",    // Wifi Find
+                    Some(NetworkManagerState::ConnectedLocal | NetworkManagerState::ConnectedSite) => {
+                        "\u{eb2f}"
+                    } // Lan
+                    Some(NetworkManagerState::ConnectedGlobal) => "\u{e80b}", // Public
+                    Some(NetworkManagerState::Unknown) | None => "?",
+                };
+
+                iced_widget::text(icon).font(Font::with_name("Material Symbols Rounded"))
+            }
+            State::Err { message, .. } => iced_widget::text(message),
+        };
+        iced_widget::mouse_area(widget).on_press(Message::LaunchSettings).into()
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        match self.state {
+            State::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
+            State::Err { .. } => Subscription::none(),
         }
     }
 }
 
 #[derive(Clone, Default, Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct NetworkConfig {
+pub struct Config {
     pub settings_command: Option<Box<[String]>>,
 }
 
-async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
+#[allow(private_interfaces)]
+#[derive(Clone)]
+pub enum Message {
+    NewState(NetworkManagerState),
+    NewConnectionType(String),
+    LaunchSettings,
+    Error(String),
+}
+
+async fn task(mut tx: Sender<Message>) {
     let connection = match zbus::Connection::system().await {
         Ok(x) => x,
         Err(e) => {
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("Failed to connect to system bus: {e}"));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!("Failed to connect to system bus: {e}"))).await;
             tracing::error!(error = %e, "Failed to connect to system bus");
             return;
         }
@@ -97,10 +121,7 @@ async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
     let proxy = match NetworkManagerProxy::new(&connection).await {
         Ok(x) => x,
         Err(e) => {
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("Failed to create network manager proxy: {e}"));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!("Failed to create network manager proxy: {e}"))).await;
             tracing::error!(error = %e, "Failed to create network manager proxy");
             return;
         }
@@ -110,8 +131,7 @@ async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
 
     futures::join!(
         {
-            let this = &this;
-            let mut cx = cx.clone();
+            let mut tx = tx.clone();
             async move {
                 while let Some(new_primary_connection_type) =
                     primary_connection_type_stream.next().await
@@ -122,10 +142,7 @@ async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
                                 new_primary_connection_type,
                                 "PrimaryConnectionType changed"
                             );
-                            let _ = this.update(&mut cx, |this, cx| {
-                                this.primary_connection_type = Some(new_primary_connection_type);
-                                cx.notify();
-                            });
+                            tx.send(Message::NewConnectionType(new_primary_connection_type)).await;
                         }
                         Err(e) => {
                             tracing::error!(error = %e, "Failed to get new PrimaryConnectionType");
@@ -139,10 +156,7 @@ async fn task(this: WeakEntity<Network>, cx: &mut AsyncApp) {
                 match new_state.get().await {
                     Ok(new_state) => {
                         tracing::info!(?new_state, "State changed");
-                        let _ = this.update(cx, |this, cx| {
-                            this.state = Some(new_state);
-                            cx.notify();
-                        });
+                        tx.send(Message::NewState(new_state)).await;
                     }
                     Err(e) => {
                         tracing::error!(error = %e, "Failed to get new State");

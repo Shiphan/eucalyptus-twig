@@ -1,18 +1,9 @@
 use std::time::Duration;
 
 use futures::{StreamExt, join};
-use gpui::{
-    AsyncApp,
-    Context,
-    IntoElement,
-    ParentElement,
-    Render,
-    Styled,
-    WeakEntity,
-    Window,
-    div,
-    rems,
-};
+use iced_core::Font;
+use iced_futures::Subscription;
+use iced_runtime::Task;
 use serde_repr::Deserialize_repr;
 use zbus::{
     Connection,
@@ -20,127 +11,146 @@ use zbus::{
     zvariant::{self, ObjectPath, OwnedObjectPath},
 };
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
 
-#[derive(Clone)]
-pub struct Power {
-    error_message: Option<String>,
-    type_: Option<u32>,
-    state: Option<BatteryPowerState>,
-    percentage: Option<f64>,
-    time_to_empty: Option<Duration>,
-    time_to_full: Option<Duration>,
+#[allow(private_interfaces)]
+pub enum Power {
+    Ok {
+        kind: Option<u32>,
+        state: Option<BatteryPowerState>,
+        percentage: Option<f64>,
+        time_to_empty: Option<Duration>,
+        time_to_full: Option<Duration>,
+    },
+    Err {
+        message: String,
+    },
 }
 
 impl Widget for Power {
     type Config = ();
 
-    fn new(cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        cx.spawn(task).detach();
+    type Message = Message;
 
-        Self {
-            error_message: None,
-            type_: None,
-            state: None,
-            percentage: None,
-            time_to_empty: None,
-            time_to_full: None,
-        }
+    fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
+        (Self::Ok { kind: None, state: None, percentage: None, time_to_empty: None, time_to_full: None }, Task::none())
     }
-}
 
-impl Render for Power {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        if let Some(e) = &self.error_message {
-            div().child(e.clone())
-        } else if self.type_ == Some(2)
-            && let Some(state) = &self.state
-            && let Some(percentage) = self.percentage
-        {
-            match state {
-                BatteryPowerState::Charging => div()
-                    .flex()
-                    .gap(rems(0.25))
-                    .child(div().font_family("Material Symbols Rounded").child(
-                        if percentage >= 100.0 {
-                            "\u{e1a4}"
-                        } else if percentage >= 80.0 {
-                            "\u{f0a7}"
-                        } else if percentage >= 70.0 {
-                            "\u{f0a6}"
-                        } else if percentage >= 50.0 {
-                            "\u{f0a5}"
-                        } else if percentage >= 40.0 {
-                            "\u{f0a4}"
-                        } else if percentage >= 20.0 {
-                            "\u{f0a3}"
-                        } else if percentage >= 10.0 {
-                            "\u{f0a2}"
-                        } else {
-                            "\u{e1a3}"
-                        },
-                    ))
-                    .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Discharging => div()
-                    .flex()
-                    .gap(rems(0.25))
-                    .child(div().font_family("Material Symbols Rounded").child(
-                        if percentage >= 100.0 {
-                            "\u{e1a4}"
-                        } else if percentage >= 80.0 {
-                            "\u{ebd2}"
-                        } else if percentage >= 70.0 {
-                            "\u{ebd4}"
-                        } else if percentage >= 50.0 {
-                            "\u{ebe2}"
-                        } else if percentage >= 40.0 {
-                            "\u{ebdd}"
-                        } else if percentage >= 20.0 {
-                            "\u{ebe0}"
-                        } else if percentage >= 10.0 {
-                            "\u{ebd9}"
-                        } else {
-                            "\u{ebdc}"
-                        },
-                    ))
-                    .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Empty => div()
-                    .flex()
-                    .gap(rems(0.25))
-                    .child("\u{ebdc}")
-                    .child(format!("{:.0}", percentage)),
-                BatteryPowerState::FullyCharged
-                | BatteryPowerState::PendingCharge
-                | BatteryPowerState::PendingDischarge => div()
-                    .flex()
-                    .gap(rems(0.25))
-                    .child("\u{f7eb}")
-                    .child(format!("{:.0}", percentage)),
-                BatteryPowerState::Unknown => div().child("State: Unknown"),
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match (self, message) {
+            (Power::Ok { kind, .. }, Message::NewKind(k)) => {
+                *kind = k;
             }
-        } else {
-            div().child("?")
-            // let Self {
-            //     error_message: _,
-            //     type_,
-            //     state,
-            //     percentage,
-            //     time_to_empty,
-            //     time_to_full,
-            // } = self.clone();
-            // div().child(format!("type = {type_:?}, state = {state:?}, percentage = {percentage:?}, time_to_empty = {time_to_empty:?}, time_to_full = {time_to_full:?}"))
+            (Power::Ok { state, .. }, Message::NewState(s)) => {
+                *state = s;
+            }
+            (Power::Ok { percentage, .. }, Message::NewPercentage(p)) => {
+                *percentage = p;
+            }
+            (Power::Ok { time_to_empty, .. }, Message::NewTimeToEmpty(t)) => {
+                *time_to_empty = t;
+            }
+            (Power::Ok { time_to_full, .. }, Message::NewTimeToFull(t)) => {
+                *time_to_full = t;
+            }
+            (s, Message::Error(message)) => {
+                *s = Self::Err { message };
+            }
+            (Power::Err { .. }, _) => (),
+        }
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        match self {
+            Power::Ok { kind: Some(2), state: Some(state), percentage: Some(percentage), time_to_empty, time_to_full } => {
+                let _ = (time_to_empty, time_to_full);
+                let percentage = *percentage;
+                match state {
+                    BatteryPowerState::Charging => iced_widget::row![
+                        iced_widget::text(
+                            if percentage >= 100.0 {
+                                "\u{e1a4}"
+                            } else if percentage >= 80.0 {
+                                "\u{f0a7}"
+                            } else if percentage >= 70.0 {
+                                "\u{f0a6}"
+                            } else if percentage >= 50.0 {
+                                "\u{f0a5}"
+                            } else if percentage >= 40.0 {
+                                "\u{f0a4}"
+                            } else if percentage >= 20.0 {
+                                "\u{f0a3}"
+                            } else if percentage >= 10.0 {
+                                "\u{f0a2}"
+                            } else {
+                                "\u{e1a3}"
+                            },
+                        ).font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text!("{:.0}", percentage),
+                    ].into(),
+                    BatteryPowerState::Discharging => iced_widget::row![
+                        iced_widget::text(
+                            if percentage >= 100.0 {
+                                "\u{e1a4}"
+                            } else if percentage >= 80.0 {
+                                "\u{ebd2}"
+                            } else if percentage >= 70.0 {
+                                "\u{ebd4}"
+                            } else if percentage >= 50.0 {
+                                "\u{ebe2}"
+                            } else if percentage >= 40.0 {
+                                "\u{ebdd}"
+                            } else if percentage >= 20.0 {
+                                "\u{ebe0}"
+                            } else if percentage >= 10.0 {
+                                "\u{ebd9}"
+                            } else {
+                                "\u{ebdc}"
+                            },
+                        ).font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text!("{:.0}", percentage),
+                    ].into(),
+                    BatteryPowerState::Empty => iced_widget::row![
+                        iced_widget::text("\u{ebdc}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text!("{:.0}", percentage),
+                    ].into(),
+                    BatteryPowerState::FullyCharged
+                    | BatteryPowerState::PendingCharge
+                    | BatteryPowerState::PendingDischarge => iced_widget::row![
+                        iced_widget::text("\u{f7eb}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text!("{:.0}", percentage),
+                    ].into(),
+                    BatteryPowerState::Unknown => iced_widget::text("State: Unknown").into(),
+                }
+            }
+            Power::Ok { .. } => iced_widget::text("?").into(),
+            Power::Err { message } => iced_widget::text(message).into(),
+        }
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        match self {
+            Self::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
+            Self::Err { .. } => Subscription::none(),
         }
     }
 }
 
-async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
+#[allow(private_interfaces)]
+pub enum Message {
+    NewKind(Option<u32>),
+    NewState(Option<BatteryPowerState>),
+    NewPercentage(Option<f64>),
+    NewTimeToEmpty(Option<Duration>),
+    NewTimeToFull(Option<Duration>),
+    Error(String),
+}
+
+async fn task(mut tx: iced_runtime::task::Sender<Message>) {
     let connection = match Connection::system().await {
         Ok(x) => x,
         Err(e) => {
-            let _ = this.update(cx, |this, cx| {
-                this.error_message = Some(format!("Failed to connect to system bus: {e}"));
-                cx.notify();
-            });
+            tx.send(Message::Error(format!("Failed to connect to system bus: {e}"))).await;
             tracing::error!(error = %e, "Failed to connect to system bus");
             return;
         }
@@ -151,10 +161,7 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
         {
             Ok(x) => x,
             Err(e) => {
-                let _ = this.update(cx, |this, cx| {
-                    this.error_message = Some(format!("Failed to create properties proxy: {e}"));
-                    cx.notify();
-                });
+                tx.send(Message::Error(format!("Failed to create properties proxy: {e}"))).await;
                 tracing::error!(error = %e, "Failed to create properties proxy");
                 return;
             }
@@ -165,19 +172,15 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
     let mut time_to_empty_stream = display_device_proxy.receive_time_to_empty_changed().await;
     let mut time_to_full_stream = display_device_proxy.receive_time_to_full_changed().await;
     macro_rules! handle_stream {
-        ($stream:expr, $field:ident, $name:literal $(, $and_then:expr)?) => {
+        ($stream:expr, $message:ident, $name:literal $(, $and_then:expr)?) => {
             {
-                let mut cx = cx.clone();
-                let this = &this;
+                let mut tx = tx.clone();
                 async move {
-                    while let Some($field) = $stream.next().await {
-                        match $field.get().await {
-                            Ok($field) => {
-                                tracing::info!(?$field, concat!($name, " changed"));
-                                let _ = this.update(&mut cx, |this, cx| {
-                                    this.$field = Some($field)$(.and_then($and_then))?;
-                                    cx.notify()
-                                });
+                    while let Some(new) = $stream.next().await {
+                        match new.get().await {
+                            Ok(new) => {
+                                tracing::info!(?new, concat!($name, " changed"));
+                                tx.send(Message::$message(Some(new)$( .and_then($and_then) )?)).await;
                             }
                             Err(e) => {
                                 tracing::error!(error = %e, concat!("Failed to get new ", $name));
@@ -190,12 +193,12 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
         };
     }
     join!(
-        handle_stream!(type_stream, type_, "Type"),
-        handle_stream!(state_stream, state, "State"),
-        handle_stream!(percentage_stream, percentage, "Percentage"),
+        handle_stream!(type_stream, NewKind, "Type"),
+        handle_stream!(state_stream, NewState, "State"),
+        handle_stream!(percentage_stream, NewPercentage, "Percentage"),
         handle_stream!(
             time_to_empty_stream,
-            time_to_empty,
+            NewTimeToEmpty,
             "TimeToEmpty",
             |x| if x != 0
                 && let Ok(x) = x.try_into()
@@ -207,7 +210,7 @@ async fn task(this: WeakEntity<Power>, cx: &mut AsyncApp) {
         ),
         handle_stream!(
             time_to_full_stream,
-            time_to_full,
+            NewTimeToFull,
             "TimeToFull",
             |x| if x != 0
                 && let Ok(x) = x.try_into()

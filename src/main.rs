@@ -1,42 +1,21 @@
 use std::{
     borrow::Cow,
-    ops::Deref,
     path::{Path, PathBuf},
-    pin::Pin,
-    task::Poll,
-    time::Duration,
 };
 
-use gpui::{
-    App,
-    Bounds,
-    Context,
-    Entity,
-    Pixels,
-    PlatformDisplay,
-    Size,
-    Window,
-    WindowBackgroundAppearance,
-    WindowBounds,
-    WindowKind,
-    WindowOptions,
-    div,
-    layer_shell::{Anchor, KeyboardInteractivity, Layer, LayerShellOptions},
-    point,
-    prelude::*,
-    px,
-    rems,
-};
+use iced_core::Length;
+use iced_runtime::Task;
 use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
-use crate::{config::Config, widget::WidgetViewGroup};
+use crate::{
+    config::Config,
+    widget::{Message, WidgetKind, WidgetState},
+};
 
+mod application;
 mod config;
-mod power_menu;
+// mod power_menu;
 mod widget;
-
-const WIDTH: f32 = 1440.0;
-const HEIGHT: f32 = 40.0;
 
 fn main() {
     let log_directory = if let Some(xdg_state_home) = std::env::var_os("XDG_STATE_HOME") {
@@ -47,6 +26,7 @@ fn main() {
         Cow::Borrowed(Path::new("~/.local/state/eucalyptus-twig"))
     };
     tracing_subscriber::registry()
+        .with(tracing_subscriber::EnvFilter::from_default_env()) // TODO: set logging level in config file
         .with(tracing_subscriber::fmt::layer().map_fmt_fields(|f| f.debug_alt()))
         .with(
             // TODO: consider tracing_appender::non_blocking
@@ -57,20 +37,6 @@ fn main() {
                     &log_directory,
                     "eucalyptus-twig.log",
                 )),
-        )
-        .with(
-            tracing_subscriber::filter::Targets::new()
-                .with_default(tracing::Level::WARN)
-                .with_target(
-                    env!("CARGO_CRATE_NAME"),
-                    if cfg!(feature = "tracing-trace") {
-                        tracing::Level::TRACE
-                    } else if cfg!(feature = "tracing-info") {
-                        tracing::Level::INFO
-                    } else {
-                        tracing::Level::WARN
-                    },
-                ),
         )
         .init();
     std::panic::set_hook(Box::new(|panic| {
@@ -95,145 +61,77 @@ fn main() {
         }
     };
 
-    gpui_platform::application().run(move |cx: &mut App| {
-        cx.spawn(async move |cx| {
-            // TODO: by default, gpui will not wait for wayland to tell us displays information
-            // wait 10 poll for wayland to tell us all screens
-            PollCounter::new(10).await;
-            // or wait a bit for wayland to tell us all screens
-            cx.background_executor()
-                // .timer(Duration::from_nanos(1000))
-                .timer(Duration::from_millis(1))
-                .await;
-
-            cx.update(|cx| {
-                let displays = cx.displays();
-
-                tracing::info!(?displays);
-
-                if displays.len() == 0 {
-                    tracing::warn!("there is no display in gpui context");
-                }
-
-                for display in displays {
-                    cx.open_window(Bar::window_options(Some(display)), |window, cx| {
-                        Bar::build_root_view(window, cx, &config)
-                    })
-                    .unwrap();
-                }
-            });
-        })
-        .detach();
-    });
+    let (state, task) = State::new(config);
+    application::Application::new(state, task)
+        .unwrap()
+        .run()
+        .unwrap();
 }
 
-struct Bar {
-    left: Vec<WidgetViewGroup>,
-    middle: Vec<WidgetViewGroup>,
-    right: Vec<WidgetViewGroup>,
+struct State {
+    left: Box<[Box<[WidgetKind]>]>,
+    middle: Box<[Box<[WidgetKind]>]>,
+    right: Box<[Box<[WidgetKind]>]>,
+    widget_state: WidgetState,
 }
 
-impl Bar {
-    pub fn build_root_view(_window: &mut Window, cx: &mut App, config: &Config) -> Entity<Self> {
-        cx.new(|cx| Self {
-            left: config.left.iter().map(|x| x.build(cx, config)).collect(),
-            middle: config.middle.iter().map(|x| x.build(cx, config)).collect(),
-            right: config.right.iter().map(|x| x.build(cx, config)).collect(),
-        })
-    }
-    pub fn window_options(
-        display: Option<impl Deref<Target = impl PlatformDisplay + ?Sized>>,
-    ) -> WindowOptions {
-        WindowOptions {
-            window_bounds: Some(WindowBounds::Windowed(
-                // TODO: I want the window height to fit the content, and the width based on screen width
-                if let Some(display) = display.as_ref()
-                    && false
-                {
-                    let mut bounds = display.bounds();
-                    bounds.size.height = px(HEIGHT);
-                    bounds
-                } else {
-                    Bounds {
-                        origin: point(px(0.0), px(0.0)),
-                        size: Size::new(px(WIDTH), px(HEIGHT)),
-                    }
-                },
-            )),
-            titlebar: None,
-            kind: WindowKind::LayerShell(LayerShellOptions {
-                namespace: "eucalyptus-twig".to_owned(),
-                layer: Layer::Top,
-                anchor: Anchor::TOP,
-                // TODO: this height should also based on the content
-                exclusive_zone: Some(Pixels::from(HEIGHT)),
-                exclusive_edge: Some(Anchor::TOP),
-                keyboard_interactivity: KeyboardInteractivity::None,
-                ..Default::default()
-            }),
-            display_id: display.as_ref().map(|x| x.id()),
-            window_background: WindowBackgroundAppearance::Transparent,
-            ..Default::default()
-        }
+impl State {
+    fn new(config: Config) -> (Self, Task<Message>) {
+        let mut widget_state = WidgetState::default();
+
+        let tasks = [
+            config.left.iter(),
+            config.middle.iter(),
+            config.right.iter(),
+        ]
+        .into_iter()
+        .flatten()
+        .flat_map(|group| group.into_iter())
+        .filter_map(|widget_kind| widget_state.init_widget(widget_kind, &config))
+        .collect::<Vec<_>>();
+
+        (
+            Self {
+                left: config.left.into_iter().map(Into::into).collect(),
+                middle: config.middle.into_iter().map(Into::into).collect(),
+                right: config.right.into_iter().map(Into::into).collect(),
+                widget_state,
+            },
+            Task::batch(tasks),
+        )
     }
 }
 
-impl Render for Bar {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .size_full()
-            .flex()
-            .items_center()
-            .justify_between()
-            // .text_size(rems(1.2))
-            // .font_weight(FontWeight::EXTRA_BOLD)
-            // .text_color(white())
-            // .bg(rgba(0x0000044))
-            .rounded_xl()
-            .p_1()
-            .child(
-                div()
-                    .flex_grow()
-                    .flex_basis(px(0.0))
-                    .flex()
-                    .justify_start()
-                    .gap(rems(0.25))
-                    .children(self.left.clone()),
-            )
-            .child(div().flex().gap(rems(0.25)).children(self.middle.clone()))
-            .child(
-                div()
-                    .flex_grow()
-                    .flex_basis(px(0.0))
-                    .flex()
-                    .justify_end()
-                    .gap(rems(0.25))
-                    .children(self.right.clone()),
-            )
+impl application::State for State {
+    type Message = Message;
+
+    fn update(&mut self, message: Self::Message) -> impl Into<iced_runtime::Task<Self::Message>> {
+        self.widget_state.update(message)
     }
-}
 
-struct PollCounter {
-    count: u32,
-    max: u32,
-}
-
-impl PollCounter {
-    pub fn new(max: u32) -> Self {
-        Self { count: 0, max }
+    fn view(&self) -> impl Into<application::Element<'_, Self::Message>> {
+        let map_widget_kind_group_to_row = |widget_kind_groups: &Box<[Box<[WidgetKind]>]>| {
+            iced_widget::row(widget_kind_groups.iter().map(|widgets| {
+                iced_widget::container(iced_widget::row(
+                    widgets
+                        .iter()
+                        .filter_map(|widget_kind| self.widget_state.view(widget_kind)),
+                ))
+                .style(iced_widget::container::primary)
+                .into()
+            }))
+            .spacing(6.0)
+        };
+        iced_widget::row![
+            iced_widget::container(map_widget_kind_group_to_row(&self.left))
+                .align_left(Length::Fill),
+            map_widget_kind_group_to_row(&self.middle),
+            iced_widget::container(map_widget_kind_group_to_row(&self.right))
+                .align_right(Length::Fill),
+        ]
     }
-}
 
-impl Future for PollCounter {
-    type Output = ();
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Self::Output> {
-        if self.count >= self.max {
-            Poll::Ready(())
-        } else {
-            self.count += 1;
-            cx.waker().wake_by_ref();
-            Poll::Pending
-        }
+    fn subscription(&self) -> impl Into<iced_futures::Subscription<Self::Message>> {
+        self.widget_state.subscription()
     }
 }

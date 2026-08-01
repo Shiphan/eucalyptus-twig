@@ -1,33 +1,25 @@
-use gpui::{
-    Context,
-    InteractiveElement,
-    IntoElement,
-    ParentElement,
-    Render,
-    StatefulInteractiveElement,
-    Window,
-    div,
-};
+use iced_runtime::Task;
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
+
+// FIXME: segmentation fault (core dumped) after iced_runtime::exit()
 
 pub struct Quit;
 
 impl Widget for Quit {
     type Config = ();
 
-    fn new(_cx: &mut Context<Self>, _config: &Self::Config) -> Self {
-        Self
-    }
-}
+    type Message = ();
 
-impl Render for Quit {
-    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .id("quit-button")
-            .on_click(|_click_event, _window, cx| {
-                cx.quit();
-            })
-            .child("Quit")
+    fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
+        (Self, Task::none())
+    }
+
+    fn update(&mut self, (): Self::Message) -> impl Into<Task<Self::Message>> {
+        iced_runtime::exit()
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        iced_widget::mouse_area(iced_widget::text("Quit")).on_press(()).into()
     }
 }

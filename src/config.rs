@@ -2,22 +2,14 @@ use std::{env, error::Error, fs, path::PathBuf};
 
 use serde::Deserialize;
 
-use crate::widget::{
-    bluetooth::BluetoothConfig,
-    clock::ClockConfig,
-    network::NetworkConfig,
-    power_menu::PowerMenuConfig,
-    power_profile::PowerProfileConfig,
-    system_information::SystemInformationConfig,
-    volume::VolumeConfig,
-};
+use crate::widget::{WidgetConfig, WidgetKind};
 
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
-    pub left: Box<[WidgetOptionGroup]>,
-    pub middle: Box<[WidgetOptionGroup]>,
-    pub right: Box<[WidgetOptionGroup]>,
+    pub left: Box<[WidgetKindGroup]>,
+    pub middle: Box<[WidgetKindGroup]>,
+    pub right: Box<[WidgetKindGroup]>,
     pub widget: WidgetConfig,
 }
 
@@ -25,16 +17,19 @@ impl Default for Config {
     fn default() -> Self {
         Self {
             left: Box::new([
-                WidgetOption::PowerMenu.into(),
-                WidgetOption::Power.into(),
-                WidgetOption::Clock.into(),
-                WidgetOption::Display.into(),
+                // WidgetKind::PowerMenu.into(),
+                WidgetKind::Power.into(),
+                WidgetKind::Clock.into(),
+                // WidgetKind::Display.into(),
             ]),
-            middle: Box::new([WidgetOption::Workspaces.into()]),
+            middle: Box::new([
+                // WidgetKind::Workspaces.into()
+            ]),
             right: Box::new([
-                WidgetOption::Volume.into(),
-                WidgetOption::Bluetooth.into(),
-                WidgetOption::PowerProfile.into(),
+                // WidgetKind::Volume.into(),
+                // WidgetKind::Network.into(),
+                [WidgetKind::Network, WidgetKind::Bluetooth].into(),
+                // WidgetKind::PowerProfile.into(),
             ]),
             widget: WidgetConfig::default(),
         }
@@ -69,51 +64,42 @@ impl Config {
 }
 
 #[derive(Deserialize)]
-pub enum WidgetOption {
-    Bluetooth,
-    Clock,
-    Display,
-    HyprlandWorkspace,
-    Network,
-    Power,
-    PowerMenu,
-    PowerProfile,
-    Quit,
-    SystemInformation,
-    Volume,
-    Workspaces,
-}
-
-#[derive(Deserialize)]
 #[serde(untagged)]
-pub enum WidgetOptionGroup {
-    One(WidgetOption),
-    Array(Box<[WidgetOption]>),
+pub enum WidgetKindGroup {
+    One(WidgetKind),
+    Array(Box<[WidgetKind]>),
 }
 
-impl From<WidgetOption> for WidgetOptionGroup {
-    fn from(value: WidgetOption) -> Self {
+impl<'a> IntoIterator for &'a WidgetKindGroup {
+    type Item = &'a WidgetKind;
+
+    type IntoIter = std::slice::Iter<'a, WidgetKind>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        match self {
+            WidgetKindGroup::One(widget) => std::slice::from_ref(widget).iter(),
+            WidgetKindGroup::Array(widgets) => widgets.iter(),
+        }
+    }
+}
+
+impl From<WidgetKind> for WidgetKindGroup {
+    fn from(value: WidgetKind) -> Self {
         Self::One(value)
     }
 }
 
-impl<T> From<T> for WidgetOptionGroup
-where
-    T: Into<Box<[WidgetOption]>>,
-{
-    fn from(value: T) -> Self {
-        Self::Array(value.into())
+impl<const N: usize> From<[WidgetKind; N]> for WidgetKindGroup {
+    fn from(value: [WidgetKind; N]) -> Self {
+        Self::Array(Box::new(value))
     }
 }
 
-#[derive(Deserialize, Default)]
-#[serde(default, deny_unknown_fields)]
-pub struct WidgetConfig {
-    pub bluetooth: BluetoothConfig,
-    pub clock: ClockConfig,
-    pub network: NetworkConfig,
-    pub power_menu: PowerMenuConfig,
-    pub power_profile: PowerProfileConfig,
-    pub system_information: SystemInformationConfig,
-    pub volume: VolumeConfig,
+impl Into<Box<[WidgetKind]>> for WidgetKindGroup {
+    fn into(self) -> Box<[WidgetKind]> {
+        match self {
+            Self::One(widget_kind) => Box::new([widget_kind]),
+            Self::Array(widget_kinds) => widget_kinds,
+        }
+    }
 }

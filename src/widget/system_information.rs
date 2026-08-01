@@ -1,35 +1,23 @@
 use std::{
-    convert::identity,
     fs::{self, File},
     io::{BufRead, BufReader},
     time::Duration,
 };
 
-use gpui::{
-    Context,
-    IntoElement,
-    ParentElement,
-    PathBuilder,
-    PathStyle,
-    Render,
-    StrokeOptions,
-    Styled,
-    Window,
-    canvas,
-    div,
-    opaque_grey,
-    point,
-    rems,
-};
 use heapless::HistoryBuf;
-use lyon::path::LineCap;
+use iced_core::{Font, Point};
+use iced_futures::Subscription;
+use iced_runtime::Task;
+use iced_widget::canvas::{LineCap, Stroke};
 use serde::Deserialize;
 
-use crate::widget::Widget;
+use crate::{application::Element, widget::Widget};
 
+// TODO: Replace heapless::HistoryBuf with something that can be configured by user (runtime allocated)
 const HISTORY_LEN: usize = 16;
 
 pub struct SystemInformation {
+    update: Duration,
     temperature_hardware_name: String,
     cpu_statistics: Option<CpuStatistics>,
     hwmon_was_here: Option<u64>,
@@ -39,29 +27,171 @@ pub struct SystemInformation {
 }
 
 impl Widget for SystemInformation {
-    type Config = SystemInformationConfig;
+    type Config = Config;
 
-    fn new(cx: &mut Context<Self>, config: &Self::Config) -> Self {
-        let update = Duration::from_secs_f64(config.update);
-        cx.spawn(async move |this, cx| {
-            loop {
-                cx.background_executor().timer(update).await;
-                let _ = this.update(cx, |_, cx| cx.notify());
+    type Message = Message;
+
+    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
+        (
+            Self {
+                update: Duration::from_secs_f64(config.update),
+                temperature_hardware_name: config.temperature_hardware_name.clone(),
+                cpu_statistics: None,
+                hwmon_was_here: None,
+                cpu_usage_history: HistoryBuf::new(),
+                memory_usage_history: HistoryBuf::new(),
+                temperature_history: HistoryBuf::new(),
+            },
+            Task::none(),
+        )
+    }
+
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
+        match message {
+            Message::Update {
+                cpu_statistics,
+                memory_info,
+                hardware_monitoring,
+            } => {
+                if let Some(cpu_statistics) = cpu_statistics
+                    && let Some(old_cpu_statistics) =
+                        self.cpu_statistics.replace(cpu_statistics.clone())
+                {
+                    let cpu_usage = 1.0 - cpu_statistics.idle_percentage(&old_cpu_statistics);
+                    self.cpu_usage_history.write(cpu_usage as f32);
+                }
+                if let Some(memory_info) = memory_info {
+                    let memory_usage = 1.0 - memory_info.available_percentage();
+                    self.memory_usage_history.write(memory_usage as f32);
+                }
+                if let Some(hardware_monitoring) = hardware_monitoring {
+                    self.hwmon_was_here = Some(hardware_monitoring.id);
+                    let temperature = hardware_monitoring.average_temperature() as f64 / 1000.0;
+                    self.temperature_history.write(temperature as f32);
+                }
             }
-        })
-        .detach();
-
-        Self {
-            temperature_hardware_name: config.temperature_hardware_name.clone(),
-            cpu_statistics: None,
-            hwmon_was_here: None,
-            cpu_usage_history: HistoryBuf::new(),
-            memory_usage_history: HistoryBuf::new(),
-            temperature_history: HistoryBuf::new(),
         }
+    }
+
+    fn view(&self) -> Element<'_, Self::Message> {
+        const CHART_WIDTH: u32 = 128;
+
+        iced_widget::row(
+            [
+                self.cpu_usage_history.recent().map(|cpu_usage| {
+                    iced_widget::row![
+                        iced_widget::text("\u{e322}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::stack![
+                            iced_widget::canvas(LineChart {
+                                history: &self.cpu_usage_history,
+                                scale: 1.0,
+                            }),
+                            iced_widget::center(iced_widget::text!("{:.0}%", (cpu_usage * 100.0).round())),
+                        ],
+                    ]
+                    .width(CHART_WIDTH)
+                    .into()
+                }),
+                self.memory_usage_history.recent().map(|memory_usage| {
+                    iced_widget::row![
+                        iced_widget::text("\u{f7a3}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::stack![
+                            iced_widget::canvas(LineChart {
+                                history: &self.memory_usage_history,
+                                scale: 1.0,
+                            }),
+                            iced_widget::center(iced_widget::text!("{:.0}%", (memory_usage * 100.0).round())),
+                        ],
+                    ]
+                    .width(CHART_WIDTH)
+                    .into()
+                }),
+                self.temperature_history.recent().map(|temperature| {
+                    iced_widget::row![
+                        iced_widget::text("\u{f076}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::stack![
+                            iced_widget::canvas(LineChart {
+                                history: &self.temperature_history,
+                                scale: 0.01,
+                            }),
+                            iced_widget::center(iced_widget::text!("{:.0}\u{b0}C", temperature.round())),
+                        ],
+                    ]
+                    .width(CHART_WIDTH)
+                    .into()
+                }),
+            ]
+            .into_iter()
+            .flatten(),
+        )
+        .into()
+    }
+
+    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
+        Subscription::run_with((self.temperature_hardware_name.clone(), self.hwmon_was_here, self.update), |data| {
+            let (temperature_hardware_name, hwmon_was_here, update) = data.clone();
+            iced_runtime::task::sipper(async move |mut tx| {
+                loop {
+                    tx.send(Message::Update {
+                        cpu_statistics: CpuStatistics::get(),
+                        memory_info: MemoryInfo::get(),
+                        hardware_monitoring: HardwareMonitoring::get(
+                            &temperature_hardware_name,
+                            hwmon_was_here,
+                        ),
+                    })
+                    .await;
+                    tokio::time::sleep(update).await;
+                }
+            })
+        })
     }
 }
 
+struct LineChart<'a> {
+    history: &'a HistoryBuf<f32, HISTORY_LEN>,
+    scale: f32,
+}
+
+impl<Message> iced_widget::canvas::Program<Message> for LineChart<'_> {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &Self::State,
+        renderer: &iced_renderer::Renderer,
+        theme: &iced_widget::renderer::core::Theme,
+        bounds: iced_core::Rectangle,
+        _cursor: iced_core::mouse::Cursor,
+    ) -> Vec<iced_widget::canvas::Geometry> {
+        use iced_widget::canvas;
+
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+
+        let mut line = canvas::path::Builder::new();
+
+        for (index, &record) in self.history.oldest_ordered().rev().enumerate() {
+            let point = Point::new(
+                frame.width() / (self.history.capacity() - 1) as f32 * (self.history.capacity() - 1 - index) as f32,
+                frame.height() * (1.0 - record * self.scale)
+            );
+            if index == 0 {
+                line.move_to(point);
+            } else {
+                line.line_to(point);
+            }
+        }
+
+        frame.stroke(&line.build(), Stroke::default()
+            .with_width(2.0)
+            .with_color(theme.palette().text.scale_alpha(0.5))
+            .with_line_cap(LineCap::Round));
+
+        vec![frame.into_geometry()]
+    }
+}
+
+/*
 impl Render for SystemInformation {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         fn item<const N: usize>(
@@ -150,17 +280,18 @@ impl Render for SystemInformation {
         )
     }
 }
+*/
 
 #[derive(Deserialize)]
 #[serde(default, deny_unknown_fields)]
-pub struct SystemInformationConfig {
+pub struct Config {
     #[serde(default = "default_update")]
     update: f64,
     #[serde(default = "default_temperature_hardware_name")]
     temperature_hardware_name: String,
 }
 
-impl Default for SystemInformationConfig {
+impl Default for Config {
     fn default() -> Self {
         Self {
             update: default_update(),
@@ -175,6 +306,15 @@ fn default_update() -> f64 {
 
 fn default_temperature_hardware_name() -> String {
     "k10temp".to_owned()
+}
+
+#[allow(private_interfaces)]
+pub enum Message {
+    Update {
+        cpu_statistics: Option<CpuStatistics>,
+        memory_info: Option<MemoryInfo>,
+        hardware_monitoring: Option<HardwareMonitoring>,
+    },
 }
 
 // TODO: improve error message
