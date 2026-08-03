@@ -125,11 +125,11 @@ impl Widget for Bluetooth {
             State::Ok {
                 powered: Some(true),
                 ..
-            } => iced_widget::text("\u{e1a7}").font(Font::with_name("Material Symbols Rounded")),
+            } => iced_widget::text("\u{e1a8}").font(Font::with_name("Material Symbols Rounded")),
             State::Ok {
                 powered: Some(false),
                 ..
-            } => iced_widget::text("\u{e1a8}").font(Font::with_name("Material Symbols Rounded")),
+            } => iced_widget::text("\u{e1a9}").font(Font::with_name("Material Symbols Rounded")),
             State::Ok { powered: None, .. } => {
                 iced_widget::text("?").font(Font::with_name("Material Symbols Rounded"))
             }
