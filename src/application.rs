@@ -119,7 +119,7 @@ where
             wgpu_device.clone(),
             wgpu_queue,
             wgpu::TextureFormat::Bgra8UnormSrgb,
-            None,
+            Some(iced_graphics::Antialiasing::MSAAx4),
             iced_graphics::Shell::headless(),
         );
 
