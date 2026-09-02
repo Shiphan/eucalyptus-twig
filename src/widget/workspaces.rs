@@ -2,6 +2,7 @@ use std::{borrow::Cow, collections::HashMap};
 
 use iced_futures::Subscription;
 use iced_runtime::Task;
+use serde::Deserialize;
 use wayland_client::{
     Connection,
     Dispatch,
@@ -14,12 +15,17 @@ use wayland_protocols::ext::workspace::v1::client::{
     ext_workspace_manager_v1::{self, ExtWorkspaceManagerV1},
 };
 
-use crate::{application::Element, widget::Widget};
+use crate::{
+    application::Element,
+    widget::Widget,
+};
 
-const IGNORE_HIDDEN: bool = true;
+pub struct Workspaces {
+    config: Config,
+    state: State,
+}
 
-#[allow(private_interfaces)]
-pub enum Workspaces {
+enum State {
     Ok {
         workspaces: HashMap<ExtWorkspaceHandleV1, Workspace>,
     },
@@ -29,25 +35,28 @@ pub enum Workspaces {
 }
 
 impl Widget for Workspaces {
-    type Config = ();
+    type Config = Config;
 
     type Message = Message;
 
-    fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
+    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
         (
-            Self::Ok {
-                workspaces: HashMap::new(),
+            Self {
+                config: config.clone(),
+                state: State::Ok {
+                    workspaces: HashMap::new(),
+                },
             },
             Task::none(),
         )
     }
 
     fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
-        match (self, message) {
-            (Self::Ok { workspaces }, Message::NewWorkspace { handle, workspace }) => {
+        match (&mut self.state, message) {
+            (State::Ok { workspaces }, Message::NewWorkspace { handle, workspace }) => {
                 workspaces.insert(handle, workspace);
             }
-            (Self::Ok { workspaces }, Message::WorkspaceEvent { handle, event }) => {
+            (State::Ok { workspaces }, Message::WorkspaceEvent { handle, event }) => {
                 use ext_workspace_handle_v1::Event;
 
                 let Some(workspace) = workspaces.get_mut(&handle) else {
@@ -104,23 +113,23 @@ impl Widget for Workspaces {
                     _ => (),
                 }
             }
-            (Self::Ok { .. }, Message::ActivateWorkspace(handle)) => {
+            (State::Ok { .. }, Message::ActivateWorkspace(handle)) => {
                 handle.activate();
             }
             (s, Message::Error(message)) => {
-                *s = Self::Err { message };
+                *s = State::Err { message };
             }
-            (Self::Err { .. }, _) => (),
+            (State::Err { .. }, _) => (),
         }
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        match self {
-            Self::Ok { workspaces } => {
+        match &self.state {
+            State::Ok { workspaces } => {
                 let mut workspaces = workspaces
                     .iter()
                     .filter_map(|(handle, workspace)| {
-                        if !IGNORE_HIDDEN && workspace.state.hidden {
+                        if workspace.state.hidden && !self.config.show_hidden_workspace {
                             None
                         } else {
                             let name = if workspace.state.active {
@@ -129,22 +138,27 @@ impl Widget for Workspaces {
                                 Cow::Borrowed(workspace.name.as_str())
                             };
 
-                            let widget = iced_widget::text(name).style(if workspace.state.urgent {
-                                iced_widget::text::warning
+                            let widget: Element<iced_core::Never> = if workspace.state.urgent {
+                                iced_widget::container(iced_widget::text(name))
+                                    .style(|theme| iced_widget::container::warning(theme).border(iced_core::border::rounded(6)))
+                                    .into()
                             } else if workspace.state.active {
-                                iced_widget::text::secondary
+                                iced_widget::container(iced_widget::text(name))
+                                    .style(|theme| iced_widget::container::primary(theme).border(iced_core::border::rounded(6)))
+                                    .into()
                             } else {
-                                iced_widget::text::default
-                            });
+                                iced_widget::text(name).into()
+                            };
                             Some((
                                 &workspace.coordinates,
                                 if workspace.capabilities.activate {
                                     Element::from(
-                                        iced_widget::mouse_area(widget).on_press(handle.clone()),
+                                        iced_widget::mouse_area(widget.map(|x| match x {}))
+                                            .on_press(handle.clone()),
                                     )
                                     .map(|handle| Message::ActivateWorkspace(handle))
                                 } else {
-                                    widget.into()
+                                    widget.map(iced_core::never)
                                 },
                             ))
                         }
@@ -154,18 +168,27 @@ impl Widget for Workspaces {
                     Some(x) => x.as_slice(),
                     None => &[],
                 });
-                iced_widget::row(workspaces.into_iter().map(|(_, x)| x)).into()
+                iced_widget::row(workspaces.into_iter().map(|(_, x)| x))
+                    .spacing(4)
+                    .into()
             }
-            Self::Err { message } => iced_widget::text(message.trim()).into(),
+            State::Err { message } => iced_widget::container(iced_widget::text(message.trim()))
+                .into(),
         }
     }
 
     fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
-        match self {
-            Self::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
-            Self::Err { .. } => Subscription::none(),
+        match self.state {
+            State::Ok { .. } => Subscription::run(|| iced_runtime::task::sipper(task)),
+            State::Err { .. } => Subscription::none(),
         }
     }
+}
+
+#[derive(Clone, Default, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct Config {
+    pub show_hidden_workspace: bool,
 }
 
 #[allow(private_interfaces)]
@@ -206,7 +229,7 @@ fn wayland_thread(mut tx: iced_runtime::task::Sender<Message>) {
     let mut event_queue = connection.new_event_queue();
     let queue_handle = event_queue.handle();
     let _registry = display.get_registry(&queue_handle, ());
-    let mut state = State::new(handle.clone(), tx.clone());
+    let mut state = WaylandState::new(handle.clone(), tx.clone());
     loop {
         if let Err(e) = event_queue.blocking_dispatch(&mut state) {
             tracing::error!(error = %e, "Wayland dispatch error");
@@ -281,14 +304,14 @@ struct PendingWorkspace {
     capabilities: Option<ext_workspace_handle_v1::WorkspaceCapabilities>,
 }
 
-struct State {
+struct WaylandState {
     runtime_handle: tokio::runtime::Handle,
     tx: iced_runtime::task::Sender<Message>,
     workspace_manager: Option<ExtWorkspaceManagerV1>,
     pending_workspaces: HashMap<ExtWorkspaceHandleV1, PendingWorkspace>,
 }
 
-impl State {
+impl WaylandState {
     fn new(
         runtime_handle: tokio::runtime::Handle,
         tx: iced_runtime::task::Sender<Message>,
@@ -302,7 +325,7 @@ impl State {
     }
 }
 
-impl Dispatch<WlRegistry, ()> for State {
+impl Dispatch<WlRegistry, ()> for WaylandState {
     fn event(
         state: &mut Self,
         proxy: &WlRegistry,
@@ -332,7 +355,7 @@ impl Dispatch<WlRegistry, ()> for State {
     }
 }
 
-impl Dispatch<ExtWorkspaceManagerV1, ()> for State {
+impl Dispatch<ExtWorkspaceManagerV1, ()> for WaylandState {
     fn event(
         state: &mut Self,
         _proxy: &ExtWorkspaceManagerV1,
@@ -360,7 +383,7 @@ impl Dispatch<ExtWorkspaceManagerV1, ()> for State {
         }
     }
 
-    wayland_client::event_created_child!(State, ExtWorkspaceManagerV1, [
+    wayland_client::event_created_child!(WaylandState, ExtWorkspaceManagerV1, [
         ext_workspace_manager_v1::EVT_WORKSPACE_GROUP_OPCODE => (ExtWorkspaceGroupHandleV1, ()),
         ext_workspace_manager_v1::EVT_WORKSPACE_OPCODE => (ExtWorkspaceHandleV1, ()),
     ]);
@@ -368,7 +391,7 @@ impl Dispatch<ExtWorkspaceManagerV1, ()> for State {
 
 // TODO: handle workspace group
 #[allow(unused)]
-impl Dispatch<ExtWorkspaceGroupHandleV1, ()> for State {
+impl Dispatch<ExtWorkspaceGroupHandleV1, ()> for WaylandState {
     fn event(
         state: &mut Self,
         proxy: &ExtWorkspaceGroupHandleV1,
@@ -392,7 +415,7 @@ impl Dispatch<ExtWorkspaceGroupHandleV1, ()> for State {
     }
 }
 
-impl Dispatch<ExtWorkspaceHandleV1, ()> for State {
+impl Dispatch<ExtWorkspaceHandleV1, ()> for WaylandState {
     fn event(
         state: &mut Self,
         proxy: &ExtWorkspaceHandleV1,
