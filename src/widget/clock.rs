@@ -5,7 +5,7 @@ use iced_widget::canvas::{LineCap, Stroke};
 use jiff::{Zoned, ZonedRound};
 use serde::Deserialize;
 
-use crate::{application::Element, widget::Widget};
+use crate::{application::Element, widget::{Widget, WidgetPadding}};
 
 // TODO: maybe we should use icu4x for localized formatting?
 
@@ -54,7 +54,7 @@ impl Widget for Clock {
             ]
             .align_y(Vertical::Center)
             .spacing(4)
-        ).into()
+        ).widget_padding().into()
     }
 
     fn subscription(&self) -> impl Into<Subscription<Self::Message>> {

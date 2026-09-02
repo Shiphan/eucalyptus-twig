@@ -106,6 +106,24 @@ pub trait Widget: Sized {
     }
 }
 
+const WIDGET_PADDING: iced_core::Padding = iced_core::Padding::new(2.0);
+
+trait WidgetPadding {
+    fn widget_padding(self) -> Self;
+}
+
+impl<Message> WidgetPadding for iced_widget::Container<'_, Message> {
+    fn widget_padding(self) -> Self {
+        self.padding(WIDGET_PADDING)
+    }
+}
+
+impl<Message> WidgetPadding for iced_widget::Row<'_, Message> {
+    fn widget_padding(self) -> Self {
+        self.padding(WIDGET_PADDING)
+    }
+}
+
 fn spawn_detached_command<S>(command: &[S], option_name: &'static str) -> Task<()>
 where
     S: AsRef<OsStr>,

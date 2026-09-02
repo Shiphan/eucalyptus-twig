@@ -11,7 +11,10 @@ use zbus::{
     zvariant::{self, ObjectPath, OwnedObjectPath},
 };
 
-use crate::{application::Element, widget::Widget};
+use crate::{
+    application::Element,
+    widget::{Widget, WidgetPadding},
+};
 
 #[allow(private_interfaces)]
 pub enum Power {
@@ -33,7 +36,16 @@ impl Widget for Power {
     type Message = Message;
 
     fn new((): &Self::Config) -> (Self, Task<Self::Message>) {
-        (Self::Ok { kind: None, state: None, percentage: None, time_to_empty: None, time_to_full: None }, Task::none())
+        (
+            Self::Ok {
+                kind: None,
+                state: None,
+                percentage: None,
+                time_to_empty: None,
+                time_to_full: None,
+            },
+            Task::none(),
+        )
     }
 
     fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
@@ -62,69 +74,83 @@ impl Widget for Power {
 
     fn view(&self) -> Element<'_, Self::Message> {
         match self {
-            Power::Ok { kind: Some(2), state: Some(state), percentage: Some(percentage), time_to_empty, time_to_full } => {
+            Power::Ok {
+                kind: Some(2),
+                state: Some(state),
+                percentage: Some(percentage),
+                time_to_empty,
+                time_to_full,
+            } => {
                 let _ = (time_to_empty, time_to_full);
                 let percentage = *percentage;
                 match state {
                     BatteryPowerState::Charging => iced_widget::row![
-                        iced_widget::text(
-                            if percentage >= 100.0 {
-                                "\u{e1a4}"
-                            } else if percentage >= 80.0 {
-                                "\u{f0a7}"
-                            } else if percentage >= 70.0 {
-                                "\u{f0a6}"
-                            } else if percentage >= 50.0 {
-                                "\u{f0a5}"
-                            } else if percentage >= 40.0 {
-                                "\u{f0a4}"
-                            } else if percentage >= 20.0 {
-                                "\u{f0a3}"
-                            } else if percentage >= 10.0 {
-                                "\u{f0a2}"
-                            } else {
-                                "\u{e1a3}"
-                            },
-                        ).font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text(if percentage >= 100.0 {
+                            "\u{e1a4}"
+                        } else if percentage >= 80.0 {
+                            "\u{f0a7}"
+                        } else if percentage >= 70.0 {
+                            "\u{f0a6}"
+                        } else if percentage >= 50.0 {
+                            "\u{f0a5}"
+                        } else if percentage >= 40.0 {
+                            "\u{f0a4}"
+                        } else if percentage >= 20.0 {
+                            "\u{f0a3}"
+                        } else if percentage >= 10.0 {
+                            "\u{f0a2}"
+                        } else {
+                            "\u{e1a3}"
+                        },)
+                        .font(Font::with_name("Material Symbols Rounded")),
                         iced_widget::text!("{:.0}", percentage),
-                    ].into(),
+                    ]
+                    .widget_padding()
+                    .into(),
                     BatteryPowerState::Discharging => iced_widget::row![
-                        iced_widget::text(
-                            if percentage >= 100.0 {
-                                "\u{e1a4}"
-                            } else if percentage >= 80.0 {
-                                "\u{ebd2}"
-                            } else if percentage >= 70.0 {
-                                "\u{ebd4}"
-                            } else if percentage >= 50.0 {
-                                "\u{ebe2}"
-                            } else if percentage >= 40.0 {
-                                "\u{ebdd}"
-                            } else if percentage >= 20.0 {
-                                "\u{ebe0}"
-                            } else if percentage >= 10.0 {
-                                "\u{ebd9}"
-                            } else {
-                                "\u{ebdc}"
-                            },
-                        ).font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text(if percentage >= 100.0 {
+                            "\u{e1a4}"
+                        } else if percentage >= 80.0 {
+                            "\u{ebd2}"
+                        } else if percentage >= 70.0 {
+                            "\u{ebd4}"
+                        } else if percentage >= 50.0 {
+                            "\u{ebe2}"
+                        } else if percentage >= 40.0 {
+                            "\u{ebdd}"
+                        } else if percentage >= 20.0 {
+                            "\u{ebe0}"
+                        } else if percentage >= 10.0 {
+                            "\u{ebd9}"
+                        } else {
+                            "\u{ebdc}"
+                        },)
+                        .font(Font::with_name("Material Symbols Rounded")),
                         iced_widget::text!("{:.0}", percentage),
-                    ].into(),
+                    ]
+                    .widget_padding()
+                    .into(),
                     BatteryPowerState::Empty => iced_widget::row![
-                        iced_widget::text("\u{ebdc}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text("\u{ebdc}")
+                            .font(Font::with_name("Material Symbols Rounded")),
                         iced_widget::text!("{:.0}", percentage),
-                    ].into(),
+                    ]
+                    .widget_padding()
+                    .into(),
                     BatteryPowerState::FullyCharged
                     | BatteryPowerState::PendingCharge
                     | BatteryPowerState::PendingDischarge => iced_widget::row![
-                        iced_widget::text("\u{f7eb}").font(Font::with_name("Material Symbols Rounded")),
+                        iced_widget::text("\u{f7eb}")
+                            .font(Font::with_name("Material Symbols Rounded")),
                         iced_widget::text!("{:.0}", percentage),
-                    ].into(),
-                    BatteryPowerState::Unknown => iced_widget::text("State: Unknown").into(),
+                    ]
+                    .widget_padding()
+                    .into(),
+                    BatteryPowerState::Unknown => iced_widget::container(iced_widget::text("State: Unknown")).widget_padding().into(),
                 }
             }
-            Power::Ok { .. } => iced_widget::text("?").into(),
-            Power::Err { message } => iced_widget::text(message).into(),
+            Power::Ok { .. } => iced_widget::container(iced_widget::text("?")).widget_padding().into(),
+            Power::Err { message } => iced_widget::container(iced_widget::text(message)).widget_padding().into(),
         }
     }
 
@@ -150,7 +176,10 @@ async fn task(mut tx: iced_runtime::task::Sender<Message>) {
     let connection = match Connection::system().await {
         Ok(x) => x,
         Err(e) => {
-            tx.send(Message::Error(format!("Failed to connect to system bus: {e}"))).await;
+            tx.send(Message::Error(format!(
+                "Failed to connect to system bus: {e}"
+            )))
+            .await;
             tracing::error!(error = %e, "Failed to connect to system bus");
             return;
         }
@@ -161,7 +190,10 @@ async fn task(mut tx: iced_runtime::task::Sender<Message>) {
         {
             Ok(x) => x,
             Err(e) => {
-                tx.send(Message::Error(format!("Failed to create properties proxy: {e}"))).await;
+                tx.send(Message::Error(format!(
+                    "Failed to create properties proxy: {e}"
+                )))
+                .await;
                 tracing::error!(error = %e, "Failed to create properties proxy");
                 return;
             }

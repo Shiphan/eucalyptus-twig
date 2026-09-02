@@ -7,7 +7,7 @@ use iced_runtime::Task;
 use serde::Deserialize;
 use zbus::{Connection, proxy, zvariant};
 
-use crate::{application::Element, widget::Widget};
+use crate::{application::Element, widget::{Widget, WidgetPadding}};
 
 pub struct PowerProfile {
     config: Config,
@@ -55,14 +55,14 @@ impl Widget for PowerProfile {
 
     fn view(&self) -> Element<'_, Self::Message> {
         match &self.state {
-            State::Ok { active_profile: Some(active_profile) } => iced_widget::mouse_area(match active_profile.as_str() {
+            State::Ok { active_profile: Some(active_profile) } => iced_widget::mouse_area(iced_widget::container(match active_profile.as_str() {
                 "power-saver" => iced_widget::text("\u{ec1a}").font(Font::with_name("Material Symbols Rounded")),
                 "balanced" => iced_widget::text("\u{e9e4}").font(Font::with_name("Material Symbols Rounded")),
                 "performance" => iced_widget::text("\u{eb9b}").font(Font::with_name("Material Symbols Rounded")),
                 _ => iced_widget::text(active_profile),
-            }).on_press(Message::Cycle).into(),
-            State::Ok { active_profile: None } => iced_widget::text("?").into(),
-            State::Err { message } => iced_widget::text(message).into(),
+            }).widget_padding()).on_press(Message::Cycle).into(),
+            State::Ok { active_profile: None } => iced_widget::mouse_area(iced_widget::container(iced_widget::text("?")).widget_padding()).on_press(Message::Cycle).into(),
+            State::Err { message } => iced_widget::container(iced_widget::text(message)).widget_padding().into(),
         }
     }
 

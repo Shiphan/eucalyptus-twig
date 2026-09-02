@@ -117,10 +117,16 @@ impl application::State for State {
                         .iter()
                         .filter_map(|widget_kind| self.widget_state.view(widget_kind)),
                 ))
-                .style(iced_widget::container::primary)
+                .padding([0, 4])
+                .style(|theme| iced_widget::container::Style {
+                    text_color: Some(theme.extended_palette().background.base.text),
+                    background: Some(theme.extended_palette().background.base.color.into()),
+                    border: iced_core::border::rounded(6),
+                    ..Default::default()
+                })
                 .into()
             }))
-            .spacing(6.0)
+            .spacing(4)
         };
         iced_widget::row![
             iced_widget::container(map_widget_kind_group_to_row(&self.left))
@@ -129,6 +135,7 @@ impl application::State for State {
             iced_widget::container(map_widget_kind_group_to_row(&self.right))
                 .align_right(Length::Fill),
         ]
+        .padding(4)
     }
 
     fn subscription(&self) -> impl Into<iced_futures::Subscription<Self::Message>> {

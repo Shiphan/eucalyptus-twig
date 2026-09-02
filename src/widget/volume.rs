@@ -27,7 +27,7 @@ use serde::Deserialize;
 
 use crate::{
     application::Element,
-    widget::{Widget, spawn_detached_command},
+    widget::{Widget, WidgetPadding, spawn_detached_command},
 };
 
 pub struct Volume {
@@ -132,7 +132,7 @@ impl Widget for Volume {
             } => iced_widget::text("?").into(),
             State::Err { message } => iced_widget::text(message).into(),
         };
-        iced_widget::mouse_area(widget)
+        iced_widget::mouse_area(iced_widget::container(widget).widget_padding())
             .on_press(Message::LaunchSettings)
             .into()
     }
@@ -313,7 +313,8 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
                             return;
                         }
                     };
-                    if let Some((node_name, card_profile_device)) = context.borrow_mut().waiting_device.remove(&global.id) {
+                    let waiting_device = context.borrow_mut().waiting_device.remove(&global.id);
+                    if let Some((node_name, card_profile_device)) = waiting_device {
                         tracing::warn!("waiting_device is been used");
                         let listener = device
                             .add_listener_local()

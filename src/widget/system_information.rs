@@ -5,13 +5,13 @@ use std::{
 };
 
 use heapless::HistoryBuf;
-use iced_core::{Font, Point};
+use iced_core::{Font, Length, Point};
 use iced_futures::Subscription;
 use iced_runtime::Task;
 use iced_widget::canvas::{LineCap, Stroke};
 use serde::Deserialize;
 
-use crate::{application::Element, widget::Widget};
+use crate::{application::Element, widget::{Widget, WidgetPadding}};
 
 // TODO: Replace heapless::HistoryBuf with something that can be configured by user (runtime allocated)
 const HISTORY_LEN: usize = 16;
@@ -74,7 +74,7 @@ impl Widget for SystemInformation {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        const CHART_WIDTH: u32 = 128;
+        const CHART_WIDTH: u32 = 64;
 
         iced_widget::row(
             [
@@ -85,11 +85,12 @@ impl Widget for SystemInformation {
                             iced_widget::canvas(LineChart {
                                 history: &self.cpu_usage_history,
                                 scale: 1.0,
-                            }),
+                            })
+                            .width(CHART_WIDTH)
+                            .height(Length::Fill),
                             iced_widget::center(iced_widget::text!("{:.0}%", (cpu_usage * 100.0).round())),
                         ],
                     ]
-                    .width(CHART_WIDTH)
                     .into()
                 }),
                 self.memory_usage_history.recent().map(|memory_usage| {
@@ -99,11 +100,12 @@ impl Widget for SystemInformation {
                             iced_widget::canvas(LineChart {
                                 history: &self.memory_usage_history,
                                 scale: 1.0,
-                            }),
+                            })
+                            .width(CHART_WIDTH)
+                            .height(Length::Fill),
                             iced_widget::center(iced_widget::text!("{:.0}%", (memory_usage * 100.0).round())),
                         ],
                     ]
-                    .width(CHART_WIDTH)
                     .into()
                 }),
                 self.temperature_history.recent().map(|temperature| {
@@ -113,17 +115,20 @@ impl Widget for SystemInformation {
                             iced_widget::canvas(LineChart {
                                 history: &self.temperature_history,
                                 scale: 0.01,
-                            }),
+                            })
+                            .width(CHART_WIDTH)
+                            .height(Length::Fill),
                             iced_widget::center(iced_widget::text!("{:.0}\u{b0}C", temperature.round())),
                         ],
                     ]
-                    .width(CHART_WIDTH)
                     .into()
                 }),
             ]
             .into_iter()
             .flatten(),
         )
+        .spacing(4)
+        .widget_padding()
         .into()
     }
 

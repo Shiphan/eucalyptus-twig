@@ -16,8 +16,7 @@ use wayland_protocols::ext::workspace::v1::client::{
 };
 
 use crate::{
-    application::Element,
-    widget::Widget,
+    application::Element, widget::{Widget, WidgetPadding},
 };
 
 pub struct Workspaces {
@@ -170,9 +169,11 @@ impl Widget for Workspaces {
                 });
                 iced_widget::row(workspaces.into_iter().map(|(_, x)| x))
                     .spacing(4)
+                    .widget_padding()
                     .into()
             }
             State::Err { message } => iced_widget::container(iced_widget::text(message.trim()))
+                .widget_padding()
                 .into(),
         }
     }

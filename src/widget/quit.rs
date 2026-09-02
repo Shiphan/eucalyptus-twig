@@ -1,6 +1,6 @@
 use iced_runtime::Task;
 
-use crate::{application::Element, widget::Widget};
+use crate::{application::Element, widget::{Widget, WidgetPadding}};
 
 // FIXME: segmentation fault (core dumped) after iced_runtime::exit()
 
@@ -20,6 +20,6 @@ impl Widget for Quit {
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
-        iced_widget::mouse_area(iced_widget::text("Quit")).on_press(()).into()
+        iced_widget::mouse_area(iced_widget::container(iced_widget::text("Quit")).widget_padding()).on_press(()).into()
     }
 }

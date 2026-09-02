@@ -18,7 +18,7 @@ use serde::Deserialize;
 
 use crate::{
     application::Element,
-    widget::{Widget, spawn_detached_command},
+    widget::{Widget, WidgetPadding, spawn_detached_command},
 };
 
 pub struct Bluetooth {
@@ -135,7 +135,7 @@ impl Widget for Bluetooth {
             }
             State::Err { message } => iced_widget::text(message),
         };
-        iced_widget::mouse_area(widget)
+        iced_widget::mouse_area(iced_widget::container(widget).widget_padding())
             .on_press(Message::LaunchSettings)
             .into()
     }

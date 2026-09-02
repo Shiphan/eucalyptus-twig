@@ -6,7 +6,7 @@ use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use zbus::zvariant;
 
-use crate::{application::Element, widget::{Widget, spawn_detached_command}};
+use crate::{application::Element, widget::{Widget, WidgetPadding, spawn_detached_command}};
 
 // TODO: Add
 // 1. support of both wifi and wired network
@@ -83,7 +83,7 @@ impl Widget for Network {
             }
             State::Err { message, .. } => iced_widget::text(message),
         };
-        iced_widget::mouse_area(widget).on_press(Message::LaunchSettings).into()
+        iced_widget::mouse_area(iced_widget::container(widget).widget_padding()).on_press(Message::LaunchSettings).into()
     }
 
     fn subscription(&self) -> impl Into<Subscription<Self::Message>> {

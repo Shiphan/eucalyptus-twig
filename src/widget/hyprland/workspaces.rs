@@ -10,7 +10,10 @@ use iced_runtime::Task;
 use serde::Deserialize;
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::UnixStream};
 
-use crate::{application::Element, widget::Widget};
+use crate::{
+    application::Element,
+    widget::{Widget, WidgetPadding},
+};
 
 pub struct HyprlandWorkspace {
     workspaces: BTreeMap<i64, WorkspaceInfo>,
@@ -43,17 +46,15 @@ impl Widget for HyprlandWorkspace {
                     tracing::warn!("Received a `createworkspacev2` with id = {id} , but there is already an old workspace with name = {}", old.name);
                 }
             }
-            Message::RemoveWorkspace { id, name } => {
-                match self.workspaces.remove(&id) {
-                    Some(old) if old.name != name => {
-                        tracing::warn!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but the old name is not the same: `{}`", old.name);
-                    }
-                    None => {
-                        tracing::error!("Received a `destroyworkspacev2` with id = {id}, but there is no workspace with same id");
-                    }
-                    _ => (),
+            Message::RemoveWorkspace { id, name } => match self.workspaces.remove(&id) {
+                Some(old) if old.name != name => {
+                    tracing::warn!("Received a `destroyworkspacev2` with id = {id} and name = {name}, but the old name is not the same: `{}`", old.name);
                 }
-            }
+                None => {
+                    tracing::error!("Received a `destroyworkspacev2` with id = {id}, but there is no workspace with same id");
+                }
+                _ => (),
+            },
             Message::NewActiveWorkspace(id) => {
                 self.active_workspace = id;
             }
@@ -82,13 +83,20 @@ impl Widget for HyprlandWorkspace {
             } => iced_widget::row(workspaces.iter().map(|(&id, info)| {
                 if Some(id) == *active_workspace || Some(id) == *active_special_workspace {
                     iced_widget::text!(" > {} < ", info.name)
-                        .style(iced_widget::text::secondary).into()
+                        .style(iced_widget::text::secondary)
+                        .into()
                 } else {
                     iced_widget::text(&info.name).into()
                 }
             }))
+            .widget_padding()
             .into(),
-            Self { error_message: Some(message), .. } => iced_widget::text(message).into(),
+            Self {
+                error_message: Some(message),
+                ..
+            } => iced_widget::container(iced_widget::text(message))
+                .widget_padding()
+                .into(),
         }
     }
 
@@ -99,14 +107,8 @@ impl Widget for HyprlandWorkspace {
 
 #[allow(private_interfaces)]
 pub enum Message {
-    NewWorkspace {
-        id: i64,
-        info: WorkspaceInfo
-    },
-    RemoveWorkspace {
-        id: i64,
-        name: String,
-    },
+    NewWorkspace { id: i64, info: WorkspaceInfo },
+    RemoveWorkspace { id: i64, name: String },
     NewActiveWorkspace(Option<i64>),
     NewActiveSpecialWorkspace(Option<i64>),
     SetWorkspapces(BTreeMap<i64, WorkspaceInfo>),
@@ -161,7 +163,10 @@ async fn task(mut tx: iced_runtime::task::Sender<Message>) {
                 tx.send(Message::ClearError).await;
             }
             Err(e) => {
-                tx.send(Message::Error(format!("error while reading the socket: {e}"))).await;
+                tx.send(Message::Error(format!(
+                    "error while reading the socket: {e}"
+                )))
+                .await;
                 break;
             }
         };
@@ -171,7 +176,13 @@ async fn task(mut tx: iced_runtime::task::Sender<Message>) {
             if let Some((id, name)) = line.split_once(",") {
                 match id.parse() {
                     Ok(id) => {
-                        tx.send(Message::NewWorkspace { id, info: WorkspaceInfo { name: name.to_owned() } }).await;
+                        tx.send(Message::NewWorkspace {
+                            id,
+                            info: WorkspaceInfo {
+                                name: name.to_owned(),
+                            },
+                        })
+                        .await;
                     }
                     Err(e) => {
                         tracing::error!(
@@ -190,7 +201,11 @@ async fn task(mut tx: iced_runtime::task::Sender<Message>) {
             if let Some((id, name)) = line.split_once(",") {
                 match id.parse() {
                     Ok(id) => {
-                        tx.send(Message::RemoveWorkspace { id, name: name.to_owned() }).await;
+                        tx.send(Message::RemoveWorkspace {
+                            id,
+                            name: name.to_owned(),
+                        })
+                        .await;
                     }
                     Err(e) => {
                         tracing::error!(
