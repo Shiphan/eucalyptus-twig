@@ -7,9 +7,15 @@
     <h1>Project Eucalyptus</h1>
 </div>
 
-### Eucalyptus Twig
+## [Eucalyptus Twig](eucalyptus-twig/README.md)
 
-### Eucalyptus Gumnut
+Status bar
 
+## [Eucalyptus Gumnut](eucalyptus-gumnut/README.md)
+
+OSD (On-Screen Display)
+
+> [!IMPORTANT]
+> Eucalyptus Gumnut is NOT ready for anyone to use
 
 

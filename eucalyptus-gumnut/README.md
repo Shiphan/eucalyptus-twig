@@ -1,5 +1,10 @@
 # Eucalyptus Gumnut
 
+An OSD (On-Screen Display) for Wayland
+
+> [!IMPORTANT]
+> Don't use this for now
+
 ---
 
 TODO:

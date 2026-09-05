@@ -1,12 +1,58 @@
 # Eucalyptus Twig
 
-Taskbar for Wayland
+A status bar for Wayland
+
+> [!NOTE]
+> There is no system tray nor power menu for now.
+
+## Config
+
+Eucalyptus Twig read a toml file at `$XDG_CONFIG_HOME/eucalyptus-twig/eucalyptus-twig.toml`
+
+An example would be:
+```toml
+left = [
+  "Power",
+  "Clock",
+]
+middle = [
+  "Workspaces",
+]
+right = [
+  "Volume",
+  ["Network", "Bluetooth"],
+  "SystemInformation",
+  "PowerProfile",
+]
+
+[widget.clock]
+format = "%-m/%-d %a %-I:%M %p"
+
+[widget.power_profile]
+cycle_direction = "Down"
+
+[widget.system_information]
+update = 1 # s
+temperature_hardware_name = "k10temp"
+
+[widget.bluetooth]
+settings_command = ["blueman-manager"]
+
+[widget.network]
+settings_command = ["alacritty", "--command", "nmtui"]
+
+[widget.volume]
+settings_command = ["pwvucontrol"]
+
+[widget.workspaces]
+show_hidden_workspace = true
+```
 
 ---
 
 TODO:
 - [ ] power menu
-    - [x] functionality
+    - [ ] functionality
     - [ ] animation
 - [ ] battery/power
     - upower (dbus): <https://upower.freedesktop.org/docs/>
@@ -24,11 +70,11 @@ TODO:
 - [ ] audio/volume
     - pipewire: <https://gitlab.freedesktop.org/pipewire/pipewire-rs>
     - pipewire-native: <https://gitlab.freedesktop.org/pipewire/pipewire-native-rs>
-    - [ ] show info: TODO: kinda works but not perfect
+    - [x] show info: TODO: kinda works but not perfect
     - [ ] setting panel
 - [ ] internet/wifi
     - networkmanager (dbus): <https://networkmanager.dev/docs/api/latest/spec.html>
-    - [ ] show info
+    - [x] show info
     - [ ] setting panel
 - [ ] bluetooth
     - bluez: <https://github.com/bluez/bluer>
