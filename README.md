@@ -11,6 +11,8 @@
 
 Status bar
 
+![eucalyptus twig screenshot](assets/eucalyptus-twig-screenshot.png)
+
 ## [Eucalyptus Gumnut](eucalyptus-gumnut/README.md)
 
 OSD (On-Screen Display)
