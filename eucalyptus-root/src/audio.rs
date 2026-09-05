@@ -1,8 +1,6 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc};
 
-use iced_core::Font;
-use iced_futures::Subscription;
-use iced_runtime::Task;
+use futures::{Sink, SinkExt, executor::block_on};
 use pipewire::{
     context::ContextRc,
     device::{Device, DeviceChangeMask, DeviceInfoRef, DeviceListener},
@@ -25,150 +23,19 @@ use pipewire::{
 };
 use serde::Deserialize;
 
-use crate::{
-    application::Element,
-    widget::{Widget, WidgetPadding, spawn_detached_command},
-};
-
-pub struct Volume {
-    config: Config,
-    state: State,
-}
-
-enum State {
-    Ok {
-        volume: Option<f32>,
-        mute: Option<bool>,
-    },
-    Err {
-        message: String,
-    },
-}
-
-impl Widget for Volume {
-    type Config = Config;
-
-    type Message = Message;
-
-    fn new(config: &Self::Config) -> (Self, Task<Self::Message>) {
-        (
-            Self {
-                config: config.clone(),
-                state: State::Ok {
-                    volume: None,
-                    mute: None,
-                },
-            },
-            Task::none(),
-        )
-    }
-
-    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
-        match (&mut self.state, message) {
-            (State::Ok { volume, .. }, Message::NewVolume(v)) => {
-                *volume = v;
-                Task::none()
-            }
-            (State::Ok { mute, .. }, Message::NewMute(m)) => {
-                *mute = m;
-                Task::none()
-            }
-            (State::Ok { volume, mute }, Message::NewVolumeAndMute(v, m)) => {
-                *volume = v;
-                *mute = m;
-                Task::none()
-            }
-            (_, Message::LaunchSettings) => {
-                if let Some(command) = &self.config.settings_command {
-                    spawn_detached_command(command, "widget.volume.settings_command").discard()
-                } else {
-                    Task::none()
-                }
-            }
-            (s, Message::Error(message)) => {
-                *s = State::Err { message };
-                Task::none()
-            }
-            (State::Err { .. }, _) => Task::none(),
-        }
-    }
-
-    fn view(&self) -> Element<'_, Self::Message> {
-        let widget: Element<_> = match &self.state {
-            State::Ok {
-                mute: Some(true), ..
-            } => iced_widget::text("\u{e04f}")
-                .font(Font::with_name("Material Symbols Rounded"))
-                .into(),
-            State::Ok {
-                volume: Some(volume),
-                mute: Some(false),
-            }
-            | State::Ok {
-                volume: Some(volume),
-                mute: None,
-            } => {
-                let volume = volume.cbrt() * 100.0;
-                iced_widget::row![
-                    iced_widget::text(if volume <= 0.0 {
-                        "\u{e04e}"
-                    } else if volume < 50.0 {
-                        "\u{e04d}"
-                    } else {
-                        "\u{e050}"
-                    })
-                    .font(Font::with_name("Material Symbols Rounded")),
-                    iced_widget::text!("{:.0}", volume),
-                ]
-                .into()
-            }
-            State::Ok {
-                volume: None,
-                mute: Some(false),
-            }
-            | State::Ok {
-                volume: None,
-                mute: None,
-            } => iced_widget::text("?").into(),
-            State::Err { message } => iced_widget::text(message).into(),
-        };
-        iced_widget::mouse_area(iced_widget::container(widget).widget_padding())
-            .on_press(Message::LaunchSettings)
-            .into()
-    }
-
-    fn subscription(&self) -> impl Into<Subscription<Self::Message>> {
-        match self.state {
-            State::Ok { .. } => Subscription::run(|| {
-                iced_runtime::task::sipper(async |tx| {
-                    if let Err(e) = tokio::task::spawn_blocking(move || pipewire_thread(tx)).await {
-                        tracing::error!(%e, "Join error");
-                    }
-                })
-            }),
-            State::Err { .. } => Subscription::none(),
-        }
-    }
-}
-
-#[derive(Clone, Default, Deserialize)]
-#[serde(default, deny_unknown_fields)]
-pub struct Config {
-    pub settings_command: Option<Box<[String]>>,
-}
-
 #[derive(Clone)]
 pub enum Message {
     NewVolume(Option<f32>),
     NewMute(Option<bool>),
     NewVolumeAndMute(Option<f32>, Option<bool>),
-    LaunchSettings,
     Error(String),
 }
 
-fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
+pub fn task<Tx>(mut tx: Tx)
+where
+    Tx: Sink<Message> + Clone + Unpin + 'static,
+{
     tracing::trace!("pipewire_thread called");
-    let handle = tokio::runtime::Handle::current();
 
     let main_loop = match MainLoopRc::new(None) {
         Ok(x) => x,
@@ -177,7 +44,7 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
                 error = %e,
                 "Failed to get PipeWire main loop"
             );
-            handle.block_on(tx.send(Message::Error(format!(
+            let _ = block_on(tx.send(Message::Error(format!(
                 "Failed to get PipeWire main loop: {e}"
             ))));
             return;
@@ -190,7 +57,7 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
                 error = %e,
                 "Failed to get PipeWire context"
             );
-            handle.block_on(tx.send(Message::Error(format!(
+            let _ = block_on(tx.send(Message::Error(format!(
                 "Failed to get PipeWire context: {e}"
             ))));
             return;
@@ -203,7 +70,7 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
                 error = %e,
                 "Failed to get PipeWire core"
             );
-            handle.block_on(tx.send(Message::Error(format!("Failed to get PipeWire core: {e}"))));
+            let _ = block_on(tx.send(Message::Error(format!("Failed to get PipeWire core: {e}"))));
             return;
         }
     };
@@ -214,7 +81,7 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
                 error = %e,
                 "Failed to get PipeWire registry"
             );
-            handle.block_on(tx.send(Message::Error(format!(
+            let _ = block_on(tx.send(Message::Error(format!(
                 "Failed to get PipeWire registry: {e}"
             ))));
             return;
@@ -228,7 +95,6 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
         default_sink_name: None,
         audio_sinks: HashMap::new(),
         waiting_device: HashMap::new(),
-        runtime_handle: handle,
         tx,
     }));
 
@@ -371,7 +237,10 @@ fn pipewire_thread(mut tx: iced_runtime::task::Sender<Message>) {
     tracing::warn!("pipewire main loop end");
 }
 
-struct Context {
+struct Context<Tx>
+where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     metadata_default_listener: Option<(Metadata, MetadataListener)>,
     node_audio_sink_listeners: HashMap<u32, (Node, NodeListener)>,
     device_listeners: HashMap<u32, (Device, Option<(i32, DeviceListener)>)>,
@@ -380,8 +249,7 @@ struct Context {
     // TODO: Read the pipewire documentation to see if it's save to remove waiting_device
     // (if the device object is always ready before any node needs it)
     waiting_device: HashMap<u32, (String, i32)>,
-    runtime_handle: tokio::runtime::Handle,
-    tx: iced_runtime::task::Sender<Message>,
+    tx: Tx,
 }
 
 #[derive(Default)]
@@ -403,7 +271,13 @@ impl AudioSinkInfo {
     }
 }
 
-fn node_info_listener(info: &NodeInfoRef, node_name: &String, context: &Rc<RefCell<Context>>) {
+fn node_info_listener<Tx>(
+    info: &NodeInfoRef,
+    node_name: &String,
+    context: &Rc<RefCell<Context<Tx>>>,
+) where
+    Tx: Sink<Message> + Clone + Unpin + 'static,
+{
     if !info.change_mask().contains(NodeChangeMask::PROPS) {
         return;
     }
@@ -515,20 +389,24 @@ fn node_info_listener(info: &NodeInfoRef, node_name: &String, context: &Rc<RefCe
     tracing::debug!(devices = ?context_borrowed.device_listeners.iter().map(|(id, (device, listener))| (id, device, listener.is_some())).collect::<Vec<_>>());
 }
 
-fn set_not_use_device(node_name: &String, context: &mut Context) {
+fn set_not_use_device<Tx>(node_name: &String, context: &mut Context<Tx>)
+where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     if let Some(audio_sink_info) = context.audio_sinks.get_mut(node_name) {
         let was_using_device = audio_sink_info.use_device;
         audio_sink_info.use_device = false;
         if was_using_device && context.default_sink_name.as_ref() == Some(node_name) {
             let (volume, mute) = audio_sink_info.get();
-            context
-                .runtime_handle
-                .block_on(context.tx.send(Message::NewVolumeAndMute(volume, mute)));
+            let _ = block_on(context.tx.send(Message::NewVolumeAndMute(volume, mute)));
         }
     }
 }
 
-fn device_info_listener(info: &DeviceInfoRef, id: u32, context: &Context) {
+fn device_info_listener<Tx>(info: &DeviceInfoRef, id: u32, context: &Context<Tx>)
+where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     if !info.change_mask().contains(DeviceChangeMask::PARAMS) {
         return;
     }
@@ -548,7 +426,7 @@ fn device_info_listener(info: &DeviceInfoRef, id: u32, context: &Context) {
     }
 }
 
-fn device_param_listener(
+fn device_param_listener<Tx>(
     seq: i32,
     id: ParamType,
     index: u32,
@@ -556,8 +434,10 @@ fn device_param_listener(
     param: Option<&Pod>,
     node_name: &String,
     card_profile_device: i32,
-    context: &mut Context,
-) {
+    context: &mut Context<Tx>,
+) where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     tracing::info!(
         seq, index, next, param = ?param.map(|x| x.type_()),
         "Device param listener"
@@ -612,9 +492,7 @@ fn device_param_listener(
                             tracing::debug!(node_name, SPA_PROP_channelVolumes = ?channel_volumes);
                             let volume = channel_volumes.into_iter().reduce(f32::max);
                             if context.default_sink_name.as_ref() == Some(node_name) {
-                                context
-                                    .runtime_handle
-                                    .block_on(context.tx.send(Message::NewVolume(volume)));
+                                let _ = block_on(context.tx.send(Message::NewVolume(volume)));
                             }
                             context
                                 .audio_sinks
@@ -656,9 +534,7 @@ fn device_param_listener(
                         Ok(mute) => {
                             tracing::debug!(node_name, SPA_PROP_mute = mute);
                             if Some(node_name) == context.default_sink_name.as_ref() {
-                                context
-                                    .runtime_handle
-                                    .block_on(context.tx.send(Message::NewMute(Some(mute))));
+                                let _ = block_on(context.tx.send(Message::NewMute(Some(mute))));
                             }
                             context
                                 .audio_sinks
@@ -697,15 +573,17 @@ fn device_param_listener(
 
 // see `collect_node_info` function in WirePlumber: <https://gitlab.freedesktop.org/pipewire/wireplumber/-/blob/master/modules/module-mixer-api.c>
 // TODO: check `wp_mixer_api_get_volume` function to see if the volume info is handled correctly: <https://gitlab.freedesktop.org/pipewire/wireplumber/-/blob/master/src/tools/wpctl.c>
-fn node_param_listener(
+fn node_param_listener<Tx>(
     seq: i32,
     id: ParamType,
     index: u32,
     next: u32,
     param: Option<&Pod>,
     node_name: &String,
-    context: &mut Context,
-) {
+    context: &mut Context<Tx>,
+) where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     match id {
         ParamType::Props => {
             tracing::debug!(
@@ -731,9 +609,7 @@ fn node_param_listener(
                             if Some(node_name) == context.default_sink_name.as_ref()
                                 && !matches!(context.audio_sinks.get(node_name), Some(audio_sink) if audio_sink.use_device)
                             {
-                                context
-                                    .runtime_handle
-                                    .block_on(context.tx.send(Message::NewVolume(volume)));
+                                let _ = block_on(context.tx.send(Message::NewVolume(volume)));
                             }
                             context
                                 .audio_sinks
@@ -769,9 +645,7 @@ fn node_param_listener(
                             if Some(node_name) == context.default_sink_name.as_ref()
                                 && !matches!(context.audio_sinks.get(node_name), Some(audio_sink) if audio_sink.use_device)
                             {
-                                context
-                                    .runtime_handle
-                                    .block_on(context.tx.send(Message::NewMute(Some(mute))));
+                                let _ = block_on(context.tx.send(Message::NewMute(Some(mute))));
                             }
                             context
                                 .audio_sinks
@@ -805,13 +679,16 @@ fn node_param_listener(
     }
 }
 
-fn metadata_listener(
+fn metadata_listener<Tx>(
     subject: u32,
     key: Option<&str>,
     type_: Option<&str>,
     value: Option<&str>,
-    context: &mut Context,
-) -> i32 {
+    context: &mut Context<Tx>,
+) -> i32
+where
+    Tx: Sink<Message> + Clone + Unpin,
+{
     tracing::debug!(subject, key, type_, value, "Metadata listener");
     match (key, type_, value) {
         (Some("default.audio.sink"), Some("Spa:String:JSON"), Some(value)) => {
@@ -822,9 +699,7 @@ fn metadata_listener(
                         Some(x) => x.get(),
                         None => (None, None),
                     };
-                    context
-                        .runtime_handle
-                        .block_on(context.tx.send(Message::NewVolumeAndMute(volume, mute)));
+                    let _ = block_on(context.tx.send(Message::NewVolumeAndMute(volume, mute)));
                     if let Some(old_default_sink_name) =
                         context.default_sink_name.replace(value.name)
                     {

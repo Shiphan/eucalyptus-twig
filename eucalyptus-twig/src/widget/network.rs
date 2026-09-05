@@ -1,12 +1,13 @@
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use futures::StreamExt;
 use iced_core::Font;
 use iced_futures::Subscription;
-use iced_runtime::{Task, task::{Sender}};
+use iced_runtime::{task::{Sender}};
 use serde::Deserialize;
 use serde_repr::Deserialize_repr;
 use zbus::zvariant;
 
-use crate::{application::Element, widget::{Widget, WidgetPadding, spawn_detached_command}};
+use crate::{widget::{Widget, WidgetPadding, spawn_detached_command}};
 
 // TODO: Add
 // 1. support of both wifi and wired network
@@ -100,7 +101,7 @@ pub struct Config {
     pub settings_command: Option<Box<[String]>>,
 }
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 #[derive(Clone)]
 pub enum Message {
     NewState(NetworkManagerState),

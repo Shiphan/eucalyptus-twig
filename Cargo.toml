@@ -1,10 +1,21 @@
-[package]
-name = "eucalyptus-twig"
-version = "0.1.0"
+[workspace]
+members = [
+    "eucalyptus-cellulose",
+    "eucalyptus-gumnut",
+    "eucalyptus-root",
+    "eucalyptus-twig",
+]
+resolver = "3"
+
+[workspace.package]
 edition = "2024"
 
-[dependencies]
+[workspace.dependencies]
+eucalyptus-cellulose = { path = "eucalyptus-cellulose" }
+eucalyptus-root = { path = "eucalyptus-root" }
+async-stream = "0.3.6"
 bluer = { version = "0.17.4", features = ["bluetoothd"] }
+clap = { version = "4.6.1", features = ["derive"] }
 futures = "0.3.31"
 heapless = "0.9.2"
 iced_core = "0.14.0"
@@ -15,13 +26,14 @@ iced_runtime = { version = "0.14.0", features = ["sipper"] }
 iced_wgpu = "0.14.0"
 iced_widget = { version = "0.14.2", features = ["canvas"] }
 jiff = "0.2.35"
+nix = { version = "0.31.2", features = ["poll", "user"] }
 pipewire = "0.9.2"
 raw-window-handle = "0.6.2"
 serde = "1.0.228"
 serde_json = "1.0.147"
 serde_repr = "0.1.20"
 smithay-client-toolkit = { version = "0.21.1", features = ["system"] }
-tokio = { version = "1.53.1", features = ["process", "rt", "time"] }
+tokio = { version = "1.53.1", features = ["io-util", "process", "rt", "time"] }
 toml = "1.1.2"
 tracing = "0.1.44"
 tracing-appender = "0.2.5"
@@ -30,5 +42,5 @@ wayland-client = "0.31.12"
 wayland-protocols = { version = "0.32.10", features = ["client", "staging"] }
 zbus = { version = "5.12.0", default-features = false, features = ["tokio"] }
 
-[lints.clippy]
+[workspace.lints.clippy]
 semicolon_if_nothing_returned = "warn"

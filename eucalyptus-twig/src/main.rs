@@ -3,8 +3,13 @@ use std::{
     path::{Path, PathBuf},
 };
 
+use eucalyptus_cellulose::{
+    action::{Action, WindowSettings},
+    task::Task,
+};
+use futures::{FutureExt, StreamExt};
 use iced_core::Length;
-use iced_runtime::Task;
+use smithay_client_toolkit::shell::wlr_layer;
 use tracing_subscriber::{field::MakeExt, layer::SubscriberExt, util::SubscriberInitExt};
 
 use crate::{
@@ -12,7 +17,7 @@ use crate::{
     widget::{Message, WidgetKind, WidgetState},
 };
 
-mod application;
+// mod application;
 mod config;
 // mod power_menu;
 mod widget;
@@ -62,7 +67,7 @@ fn main() {
     };
 
     let (state, task) = State::new(config);
-    application::Application::new(state, task)
+    eucalyptus_cellulose::Application::new(state, task)
         .unwrap()
         .run()
         .unwrap();
@@ -87,8 +92,26 @@ impl State {
         .into_iter()
         .flatten()
         .flat_map(|group| group.into_iter())
-        .filter_map(|widget_kind| widget_state.init_widget(widget_kind, &config))
-        .collect::<Vec<_>>();
+        .filter_map(|widget_kind| widget_state.init_widget(widget_kind, &config));
+        let task = futures::stream::select_all(
+            std::iter::once(
+                async {
+                    Action::OpenWindow(WindowSettings {
+                        open_on_every_output: true,
+                        layer: wlr_layer::Layer::Top,
+                        namespace: Some("eucalyptus-twig".to_owned()),
+                        anchor: wlr_layer::Anchor::TOP
+                            | wlr_layer::Anchor::LEFT
+                            | wlr_layer::Anchor::RIGHT,
+                        exclusive_zone: true,
+                    })
+                }
+                .into_stream()
+                .boxed(),
+            )
+            .chain(tasks),
+        )
+        .boxed();
 
         (
             Self {
@@ -97,19 +120,19 @@ impl State {
                 right: config.right.into_iter().map(Into::into).collect(),
                 widget_state,
             },
-            Task::batch(tasks),
+            task,
         )
     }
 }
 
-impl application::State for State {
+impl eucalyptus_cellulose::State for State {
     type Message = Message;
 
-    fn update(&mut self, message: Self::Message) -> impl Into<iced_runtime::Task<Self::Message>> {
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>> {
         self.widget_state.update(message)
     }
 
-    fn view(&self) -> impl Into<application::Element<'_, Self::Message>> {
+    fn view(&self) -> impl Into<eucalyptus_cellulose::Element<'_, Self::Message>> {
         let map_widget_kind_group_to_row = |widget_kind_groups: &Box<[Box<[WidgetKind]>]>| {
             iced_widget::row(widget_kind_groups.iter().map(|widgets| {
                 iced_widget::container(iced_widget::row(

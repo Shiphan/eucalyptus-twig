@@ -1,7 +1,7 @@
 #![allow(unused)] // TODO: temporarily allow unused
 
 use std::{
-    collections::HashMap,
+    collections::{HashMap, HashSet},
     fmt::Debug,
     num::NonZero,
     ptr::NonNull,
@@ -10,11 +10,13 @@ use std::{
 
 use futures::{
     SinkExt,
+    StreamExt,
     channel::mpsc::{self, TryRecvError, UnboundedReceiver, UnboundedSender},
+    stream::BoxStream,
 };
 use iced_core::{Font, Pixels, Point, Size, Theme};
 use iced_futures::Subscription;
-use iced_runtime::{Task, UserInterface, user_interface};
+use iced_runtime::{UserInterface, user_interface};
 use iced_wgpu::{Renderer, wgpu};
 use raw_window_handle::{WaylandDisplayHandle, WaylandWindowHandle};
 use smithay_client_toolkit::{
@@ -66,6 +68,14 @@ use smithay_client_toolkit::{
     },
 };
 
+use crate::{
+    action::{Action, WindowSettings},
+    task::{Task, TaskExt},
+};
+
+pub mod action;
+pub mod task;
+
 const HEIGHT: u32 = 40;
 
 pub type Element<'a, Message, Theme = iced_core::Theme, Renderer = iced_wgpu::Renderer> =
@@ -90,10 +100,11 @@ where
     // pending_event: Vec<iced_core::Event>,
     iced_futures_runtime: iced_futures::Runtime<
         iced_futures::backend::default::Executor,
-        UnboundedSender<iced_runtime::Action<Message>>,
-        iced_runtime::Action<Message>,
+        UnboundedSender<Action<Message>>,
+        Action<Message>,
     >,
-    future_message_rx: UnboundedReceiver<iced_runtime::Action<Message>>,
+    future_message_rx: UnboundedReceiver<Action<Message>>,
+    window_settings_for_every_output: Vec<(WindowSettings, HashSet<WlOutput>)>,
 }
 
 impl<State, Message> Application<'_, State, Message>
@@ -144,18 +155,18 @@ where
             // pending_event: vec![],
             iced_futures_runtime,
             future_message_rx,
+            window_settings_for_every_output: vec![],
         })
     }
     pub fn run(mut self) -> Result<(), Box<dyn std::error::Error>> {
-        if let Some(stream) = iced_runtime::task::into_stream(std::mem::take(&mut self.boot_task)) {
-            self.iced_futures_runtime.run(stream);
-        }
+        self.iced_futures_runtime
+            .run(std::mem::replace(&mut self.boot_task, Task::none()));
 
         self.iced_futures_runtime
             .track(iced_futures::subscription::into_recipes(
                 self.iced_futures_runtime
                     .enter(|| self.state.subscription().into())
-                    .map(iced_runtime::Action::Output),
+                    .map(Action::Output),
             ));
 
         // TODO: Make it only wake up when needed
@@ -174,34 +185,32 @@ where
             }
 
             match self.future_message_rx.try_recv() {
-                Ok(iced_runtime::Action::Output(message)) => {
+                Ok(Action::Output(message)) => {
                     let task = self.state.update(message).into();
-                    if let Some(stream) = iced_runtime::task::into_stream(task) {
-                        self.iced_futures_runtime.run(stream);
+                    self.iced_futures_runtime.run(task);
+                }
+                Ok(Action::OpenWindow(settings)) => {
+                    if settings.open_on_every_output {
+                        let outputs = self
+                            .wayland_client
+                            .output_state
+                            .outputs()
+                            .collect::<HashSet<_>>();
+                        for output in outputs.iter() {
+                            self.open_new_layer_surface(Some(output), &settings)?;
+                        }
+                        self.window_settings_for_every_output
+                            .push((settings, outputs));
+                    } else {
+                        self.open_new_layer_surface(None, &settings)?;
                     }
                 }
-                Ok(iced_runtime::Action::LoadFont { .. }) => {
-                    tracing::warn!("Action::LoadFont is not being handled");
+                Ok(Action::CloseAllWindow) => {
+                    for surface in self.surfaces.keys() {
+                        surface.destroy();
+                    }
                 }
-                Ok(iced_runtime::Action::Widget(_)) => {
-                    tracing::warn!("Action::Widget is not being handled");
-                }
-                Ok(iced_runtime::Action::Clipboard(_)) => {
-                    tracing::warn!("Action::Clipboard is not being handled");
-                }
-                Ok(iced_runtime::Action::Window(_)) => {
-                    tracing::warn!("Action::WIndow is not being handled");
-                }
-                Ok(iced_runtime::Action::System(_)) => {
-                    tracing::warn!("Action::System is not being handled");
-                }
-                Ok(iced_runtime::Action::Image(_)) => {
-                    tracing::warn!("Action::Image is not being handled");
-                }
-                Ok(iced_runtime::Action::Reload) => {
-                    tracing::warn!("Action::Reload is not being handled");
-                }
-                Ok(iced_runtime::Action::Exit) => {
+                Ok(Action::Exit) => {
                     return Ok(());
                 }
                 Err(TryRecvError::Empty) => (),
@@ -213,16 +222,17 @@ where
     }
     fn open_new_layer_surface(
         &mut self,
-        wl_output: WlOutput,
+        wl_output: Option<&WlOutput>,
+        settings: &WindowSettings,
     ) -> Result<(), Box<dyn std::error::Error>> {
         let layer_surface = self.wayland_client.create_layer_surface(
             wlr_layer::Layer::Top,
-            Some("ui-test::iced-with-custom-window"),
-            Some(&wl_output),
+            settings.namespace.clone(),
+            wl_output,
             None,
             NonZero::new(HEIGHT),
-            Some(wlr_layer::Anchor::TOP | wlr_layer::Anchor::LEFT | wlr_layer::Anchor::RIGHT),
-            Some(HEIGHT as _),
+            Some(settings.anchor),
+            settings.exclusive_zone.then_some(HEIGHT as _),
         )?;
 
         let wgpu_surface = {
@@ -260,6 +270,7 @@ where
                 cursor: iced_core::mouse::Cursor::Unavailable,
                 pending_event: vec![],
                 iced_size: None,
+                exclusive_zone: settings.exclusive_zone,
             },
         );
 
@@ -360,13 +371,15 @@ where
         {
             tracing::info!(?inspect_bounds, "bounds");
             it.layer_surface.set_size(0, bounds.height);
-            it.layer_surface.set_exclusive_zone(bounds.height as _);
+            if it.exclusive_zone {
+                it.layer_surface.set_exclusive_zone(bounds.height as _);
+            }
             it.iced_size = Some((bounds.width, bounds.height));
         }
 
         user_interface.draw(
             &mut it.renderer,
-            &Theme::Dark,
+            &Theme::KanagawaWave,
             &iced_core::renderer::Style::default(),
             it.cursor,
         );
@@ -389,22 +402,41 @@ where
 
         for message in messages {
             let task = self.state.update(message).into();
-            if let Some(stream) = iced_runtime::task::into_stream(task) {
-                self.iced_futures_runtime.run(stream);
-            }
+            self.iced_futures_runtime.run(task);
         }
 
         self.iced_futures_runtime
             .track(iced_futures::subscription::into_recipes(
                 self.iced_futures_runtime
                     .enter(|| self.state.subscription().into())
-                    .map(iced_runtime::Action::Output),
+                    .map(Action::Output),
             ));
     }
     fn on_wayland_event(&mut self, event: WaylandEvent) -> Result<(), Box<dyn std::error::Error>> {
         match event {
             WaylandEvent::NewOutput(output) => {
-                self.open_new_layer_surface(output)?;
+                let settings = self
+                    .window_settings_for_every_output
+                    .iter_mut()
+                    .filter_map(|(window_settings, outputs)| {
+                        if window_settings.open_on_every_output && outputs.insert(output.clone()) {
+                            Some(window_settings.clone())
+                        } else {
+                            None
+                        }
+                    })
+                    .collect::<Vec<_>>();
+
+                for settings in settings {
+                    if settings.open_on_every_output {
+                        self.open_new_layer_surface(Some(&output), &settings)?;
+                    }
+                }
+            }
+            WaylandEvent::OutputDestroyed(output) => {
+                for (_, outputs) in &mut self.window_settings_for_every_output {
+                    outputs.remove(&output);
+                }
             }
             WaylandEvent::SurfaceConfiure {
                 wl_surface,
@@ -575,6 +607,7 @@ struct SurfaceState {
     cursor: iced_core::mouse::Cursor,
     pending_event: Vec<iced_core::Event>,
     iced_size: Option<(u32, u32)>,
+    exclusive_zone: bool,
 }
 
 struct Clipboard;
@@ -744,6 +777,7 @@ impl LayerSurfaceInfo {
 
 enum WaylandEvent {
     NewOutput(WlOutput),
+    OutputDestroyed(WlOutput),
     SurfaceConfiure {
         wl_surface: WlSurface,
         width: NonZero<u32>,
@@ -775,7 +809,9 @@ impl OutputHandler for WaylandClient {
 
     fn update_output(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {}
 
-    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, _output: WlOutput) {
+    fn output_destroyed(&mut self, _conn: &Connection, _qh: &QueueHandle<Self>, output: WlOutput) {
+        let _ =
+            futures::executor::block_on(self.event_tx.send(WaylandEvent::OutputDestroyed(output)));
     }
 }
 

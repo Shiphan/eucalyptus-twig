@@ -1,11 +1,12 @@
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use iced_core::{Vector, alignment::Vertical};
 use iced_futures::Subscription;
-use iced_runtime::{Task, task::sipper};
+use iced_runtime::{task::sipper};
 use iced_widget::canvas::{LineCap, Stroke};
 use jiff::{Zoned, ZonedRound};
 use serde::Deserialize;
 
-use crate::{application::Element, widget::{Widget, WidgetPadding}};
+use crate::{widget::{Widget, WidgetPadding}};
 
 // TODO: maybe we should use icu4x for localized formatting?
 
@@ -36,6 +37,7 @@ impl Widget for Clock {
     fn update(&mut self, (): Self::Message) -> impl Into<Task<Self::Message>> {
         self.now = Zoned::now();
         self.formatted_time = self.now.strftime(&self.format).to_string();
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {

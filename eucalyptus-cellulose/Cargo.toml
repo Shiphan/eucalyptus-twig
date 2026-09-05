@@ -1,0 +1,20 @@
+[package]
+name = "eucalyptus-cellulose"
+version = "0.1.0"
+edition.workspace = true
+
+[dependencies]
+futures.workspace = true
+iced_core.workspace = true
+iced_futures.workspace = true
+iced_graphics.workspace = true
+iced_renderer.workspace = true
+iced_runtime.workspace = true
+iced_wgpu.workspace = true
+iced_widget.workspace = true
+raw-window-handle.workspace = true
+smithay-client-toolkit.workspace = true
+tracing.workspace = true
+
+[lints]
+workspace = true

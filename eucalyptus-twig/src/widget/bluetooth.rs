@@ -10,14 +10,13 @@ use bluer::{
     Session,
     SessionEvent,
 };
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use futures::StreamExt;
 use iced_core::Font;
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use serde::Deserialize;
 
 use crate::{
-    application::Element,
     widget::{Widget, WidgetPadding, spawn_detached_command},
 };
 

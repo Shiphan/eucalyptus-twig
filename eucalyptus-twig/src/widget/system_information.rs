@@ -4,14 +4,14 @@ use std::{
     time::Duration,
 };
 
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use heapless::HistoryBuf;
 use iced_core::{Font, Length, Point};
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use iced_widget::canvas::{LineCap, Stroke};
 use serde::Deserialize;
 
-use crate::{application::Element, widget::{Widget, WidgetPadding}};
+use crate::{widget::{Widget, WidgetPadding}};
 
 // TODO: Replace heapless::HistoryBuf with something that can be configured by user (runtime allocated)
 const HISTORY_LEN: usize = 16;
@@ -71,6 +71,7 @@ impl Widget for SystemInformation {
                 }
             }
         }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -313,7 +314,7 @@ fn default_temperature_hardware_name() -> String {
     "k10temp".to_owned()
 }
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 pub enum Message {
     Update {
         cpu_statistics: Option<CpuStatistics>,

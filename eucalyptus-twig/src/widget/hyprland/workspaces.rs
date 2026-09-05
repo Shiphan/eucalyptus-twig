@@ -5,13 +5,12 @@ use std::{
     path::Path,
 };
 
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use serde::Deserialize;
 use tokio::{io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader}, net::UnixStream};
 
 use crate::{
-    application::Element,
     widget::{Widget, WidgetPadding},
 };
 
@@ -71,6 +70,7 @@ impl Widget for HyprlandWorkspace {
                 self.error_message = None;
             }
         }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -105,7 +105,7 @@ impl Widget for HyprlandWorkspace {
     }
 }
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 pub enum Message {
     NewWorkspace { id: i64, info: WorkspaceInfo },
     RemoveWorkspace { id: i64, name: String },

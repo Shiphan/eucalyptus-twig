@@ -1,7 +1,7 @@
 use std::{borrow::Cow, collections::HashMap};
 
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use serde::Deserialize;
 use wayland_client::{
     Connection,
@@ -16,7 +16,7 @@ use wayland_protocols::ext::workspace::v1::client::{
 };
 
 use crate::{
-    application::Element, widget::{Widget, WidgetPadding},
+    widget::{Widget, WidgetPadding},
 };
 
 pub struct Workspaces {
@@ -60,7 +60,7 @@ impl Widget for Workspaces {
 
                 let Some(workspace) = workspaces.get_mut(&handle) else {
                     tracing::error!(?handle, ?event, "A new event for non-existing workspace");
-                    return;
+                    return Task::none();
                 };
                 match event {
                     Event::Id { id } => {
@@ -86,7 +86,7 @@ impl Widget for Workspaces {
                             Ok(x) => x,
                             Err(e) => {
                                 tracing::error!(error = %e, "Failed to extract state");
-                                return;
+                                return Task::none();
                             }
                         };
                         tracing::info!(?state);
@@ -97,7 +97,7 @@ impl Widget for Workspaces {
                             Ok(x) => x,
                             Err(e) => {
                                 tracing::error!(error = %e, "Failed to extract state");
-                                return;
+                                return Task::none();
                             }
                         };
                         tracing::info!(?capabilities);
@@ -120,6 +120,7 @@ impl Widget for Workspaces {
             }
             (State::Err { .. }, _) => (),
         }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -192,7 +193,7 @@ pub struct Config {
     pub show_hidden_workspace: bool,
 }
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 pub enum Message {
     NewWorkspace {
         handle: ExtWorkspaceHandleV1,

@@ -1,48 +1,11 @@
-# Eucalyptus Twig
+<div style="display: flex; align-items: center; gap: 2em;">
+    <img src="assets/logo-draft-white.png" style="height: 8em;">
+    <h1>Project Eucalyptus</h1>
+</div>
 
-Taskbar for Wayland
+### Eucalyptus Twig
 
----
+### Eucalyptus Gumnut
 
-TODO:
-- [ ] power menu
-    - [x] functionality
-    - [ ] animation
-- [ ] battery/power
-    - upower (dbus): <https://upower.freedesktop.org/docs/>
-    - [x] icon with real percentage
-    - [ ] more info: time to empty, energy rate
-- [x] clock
-    - [x] analog clock icon
-- [ ] wayland/xwayland (hyprland)
-- [ ] systray
-    - dbus: <https://www.freedesktop.org/wiki/Specifications/StatusNotifierItem/>
-- [x] workspaces (hyprland)
-    - hyprland ipc: <https://wiki.hypr.land/IPC/>
-- [x] workspaces (wayland)
-    - <https://wayland.app/protocols/ext-workspace-v1>
-- [ ] audio/volume
-    - pipewire: <https://gitlab.freedesktop.org/pipewire/pipewire-rs>
-    - pipewire-native: <https://gitlab.freedesktop.org/pipewire/pipewire-native-rs>
-    - [ ] show info: TODO: kinda works but not perfect
-    - [ ] setting panel
-- [ ] internet/wifi
-    - networkmanager (dbus): <https://networkmanager.dev/docs/api/latest/spec.html>
-    - [ ] show info
-    - [ ] setting panel
-- [ ] bluetooth
-    - bluez: <https://github.com/bluez/bluer>
-    - [x] show info
-    - [ ] setting panel
-- [x] system info
-    - [x] cpu
-    - [x] ram
-    - [x] temperature
-- [ ] power profile (power-profile-daemon)
-    - [x] show info
-    - dbus: <https://upower.pages.freedesktop.org/power-profiles-daemon/gdbus-org.freedesktop.UPower.PowerProfiles.html>
-    - [x] setting panel
-    - [ ] maybe also support tlp (same dbus api as ppd): TODO: test tlp support
-- [ ] notification
-    - dbus: <https://specifications.freedesktop.org/notification/latest/>
+
 

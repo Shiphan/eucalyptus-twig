@@ -1,6 +1,7 @@
-use iced_runtime::Task;
+use eucalyptus_cellulose::{Element, action::Action, task::{Task, TaskExt}};
+use futures::{FutureExt, StreamExt};
 
-use crate::{application::Element, widget::{Widget, WidgetPadding}};
+use crate::{widget::{Widget, WidgetPadding}};
 
 // FIXME: segmentation fault (core dumped) after iced_runtime::exit()
 
@@ -16,7 +17,7 @@ impl Widget for Quit {
     }
 
     fn update(&mut self, (): Self::Message) -> impl Into<Task<Self::Message>> {
-        iced_runtime::exit()
+        async { Action::Exit }.into_stream().boxed()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {

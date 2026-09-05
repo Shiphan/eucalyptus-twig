@@ -1,11 +1,14 @@
 use std::ffi::OsStr;
 
+use eucalyptus_cellulose::{
+    Element,
+    task::{Task, TaskExt},
+};
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use serde::Deserialize;
 use tokio::process::Command;
 
-use crate::{application::Element, config::Config};
+use crate::config::Config;
 
 macro_rules! generate {
     ($( $mod_head:ident $( ::$mod_tail:ident )* : $type_ident:ident => $var_ident:ident ),* $( , )?) => {
@@ -29,7 +32,7 @@ macro_rules! generate {
                         WidgetKind::$type_ident => {
                             self.$var_ident.get_or_insert_with(|| {
                                 let (state, t) = self::$mod_head $( ::$mod_tail )* ::$type_ident::new(&config.widget.$var_ident);
-                                task = Some(t.map(Message::$type_ident));
+                                task = Some(t.map_output(Message::$type_ident));
                                 state
                             });
                         }
@@ -40,7 +43,7 @@ macro_rules! generate {
 
             pub fn update(&mut self, message: Message) -> Task<Message> {
                 match message {
-                    $( Message::$type_ident(message) if let Some(widget) = &mut self.$var_ident => widget.update(message).into().map(Message::$type_ident), )*
+                    $( Message::$type_ident(message) if let Some(widget) = &mut self.$var_ident => widget.update(message).into().map_output(Message::$type_ident), )*
                     _ => Task::none(),
                 }
             }
@@ -97,7 +100,7 @@ pub trait Widget: Sized {
 
     fn new(config: &Self::Config) -> (Self, Task<Self::Message>);
 
-    fn update(&mut self, message: Self::Message) -> impl Into<iced_runtime::Task<Self::Message>>;
+    fn update(&mut self, message: Self::Message) -> impl Into<Task<Self::Message>>;
 
     fn view(&self) -> Element<'_, Self::Message>;
 

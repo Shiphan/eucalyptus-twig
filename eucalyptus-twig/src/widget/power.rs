@@ -1,9 +1,9 @@
 use std::time::Duration;
 
+use eucalyptus_cellulose::{Element, task::{Task, TaskExt}};
 use futures::{StreamExt, join};
 use iced_core::Font;
 use iced_futures::Subscription;
-use iced_runtime::Task;
 use serde_repr::Deserialize_repr;
 use zbus::{
     Connection,
@@ -12,11 +12,10 @@ use zbus::{
 };
 
 use crate::{
-    application::Element,
     widget::{Widget, WidgetPadding},
 };
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 pub enum Power {
     Ok {
         kind: Option<u32>,
@@ -70,6 +69,7 @@ impl Widget for Power {
             }
             (Power::Err { .. }, _) => (),
         }
+        Task::none()
     }
 
     fn view(&self) -> Element<'_, Self::Message> {
@@ -162,7 +162,7 @@ impl Widget for Power {
     }
 }
 
-#[allow(private_interfaces)]
+#[expect(private_interfaces)]
 pub enum Message {
     NewKind(Option<u32>),
     NewState(Option<BatteryPowerState>),
